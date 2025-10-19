@@ -18,7 +18,7 @@ actualVersion = 0.4;
 
 local libraryList = {
     'https://raw.githubusercontent.com/Brinquee/community_scripts/refs/heads/main/Library.lua',
-    'https://raw.githubusercontent.com/mrlthebest/Community-Scripts/refs/heads/main/script_list.lua'
+    'https://raw.githubusercontent.com/Brinquee/community_scripts/refs/heads/main/script.list.lua'
 }
 
 -- Load libraries
