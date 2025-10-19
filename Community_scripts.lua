@@ -234,26 +234,15 @@ MainWindow
                                 end
                             end
 
-                            local numSteps = 6
-                            local numCategories = #categories
-                            local numLoops = math.ceil(numCategories / numSteps)
-
-                            for i = 1, numLoops do
-                                for j = 1, numSteps do
-                                    local index = (i - 1) * numSteps + j
-                                    if index <= numCategories then
-                                        local categoryName = categories[index]
-                                        local tab = script_bot.widget.macrosOptions:addTab(categoryName)
-                                        tab:setId(categoryName)
-                                        tab:setTooltip(categoryName .. ' Macros')
-
-                                        tab.onStyleApply = function(widget)
-                                            if script_bot.widget.macrosOptions:getCurrentTab() == widget then
-                                                widget:setColor('green')
-                                            else
-                                                widget:setColor('white')
-                                            end
-                                        end
+                            for _, categoryName in ipairs(categories) do
+                                local tab = script_bot.widget.macrosOptions:addTab(categoryName)
+                                tab:setId(categoryName)
+                                tab:setTooltip(categoryName .. ' Macros')
+                                tab.onStyleApply = function(widget)
+                                    if script_bot.widget.macrosOptions:getCurrentTab() == widget then
+                                        widget:setColor('green')
+                                    else
+                                        widget:setColor('white')
                                     end
                                 end
                             end
@@ -283,3 +272,21 @@ MainWindow
         end
     end)
 end
+
+-- ===========================================================
+-- ⏳ Aguardar carregamento completo da lista (script.list.lua)
+-- ===========================================================
+local function waitForScripts()
+    if not script_manager or not script_manager._cache or next(script_manager._cache) == nil then
+        print("[Community Scripts] Aguardando lista de scripts carregar...")
+        scheduleEvent(waitForScripts, 1000)
+        return
+    end
+
+    print("[Community Scripts] Lista carregada. Inicializando painel...")
+    if script_bot and script_bot.onLoading then
+        script_bot.onLoading()
+    end
+end
+
+scheduleEvent(waitForScripts, 1200)
