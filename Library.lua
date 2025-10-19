@@ -1,35 +1,34 @@
--- ===================================================================
--- 📚 Library.lua — Biblioteca principal do Script Manager Brinquee
--- Combina os widgets visuais e as funções de carregamento dos scripts
--- ===================================================================
-
--- ================================================================
--- 🌐 Núcleo de Gerenciamento de Scripts
--- ================================================================
+-- ===========================================================
+-- 📚 Library.lua — Biblioteca base do Community Script Manager
+-- ===========================================================
 
 script_manager = script_manager or {}
 
--- Função segura para carregar scripts remotos
+---------------------------------------------------------------------
+-- 🌐 Função para carregar scripts remotos de forma segura
+---------------------------------------------------------------------
 function loadRemoteScript(url)
+  if not url then
+    print("[Library] URL inválida.")
+    return
+  end
   modules.corelib.HTTP.get(url, function(content, err)
     if not content then
-      print("[Script Manager] Erro ao baixar script:", err or "sem resposta")
+      print("[Library] Erro ao baixar script:", err or "sem resposta")
       return
     end
     local ok, res = pcall(loadstring(content))
     if not ok then
-      print("[Script Manager] Erro ao executar script:", res)
+      print("[Library] Erro ao executar script remoto:", res)
     else
-      print("[Script Manager] Script carregado:", url)
+      print("[Library] Script carregado com sucesso:", url)
     end
   end)
 end
 
--- ================================================================
--- 🎛️ Widgets visuais
--- ================================================================
-
--- ScrollBar
+---------------------------------------------------------------------
+-- 🎚️ ScrollBar configurável
+---------------------------------------------------------------------
 local scrollBarLayout = [[
 Panel
   height: 28
@@ -57,11 +56,11 @@ storage.scrollBarValues = storage.scrollBarValues or {}
 
 function addScrollBar(id, title, min, max, defaultValue, dest, tooltip)
   local widget = setupUI(scrollBarLayout, dest)
-  widget.text:setTooltip(tooltip)
+  widget.text:setTooltip(tooltip or "")
   local value = math.min(math.max(storage.scrollBarValues[id] or defaultValue, min), max)
-  widget.scroll.onValueChange = function(scroll, value)
-    widget.text:setText(title .. ": " .. value)
-    storage.scrollBarValues[id] = value
+  widget.scroll.onValueChange = function(scroll, val)
+    widget.text:setText(title .. ": " .. val)
+    storage.scrollBarValues[id] = val
   end
   widget.scroll:setMinimum(min)
   widget.scroll:setMaximum(max)
@@ -69,7 +68,9 @@ function addScrollBar(id, title, min, max, defaultValue, dest, tooltip)
   widget.scroll.onValueChange(widget.scroll, value)
 end
 
--- Switch
+---------------------------------------------------------------------
+-- 🔀 Switch (liga/desliga)
+---------------------------------------------------------------------
 local switchBarLayout = [[
 BotSwitch
   height: 20
@@ -80,16 +81,18 @@ storage.switchStatus = storage.switchStatus or {}
 
 function addSwitchBar(id, title, defaultValue, dest, tooltip)
   local widget = setupUI(switchBarLayout, dest)
+  widget:setText(title)
+  widget:setTooltip(tooltip or "")
   widget.onClick = function()
     widget:setOn(not widget:isOn())
     storage.switchStatus[id] = widget:isOn()
   end
-  widget:setText(title)
-  widget:setTooltip(tooltip)
   widget:setOn(storage.switchStatus[id] or defaultValue)
 end
 
--- Item selector
+---------------------------------------------------------------------
+-- 🎒 Item selector
+---------------------------------------------------------------------
 local itemWidget = [[
 Panel
   height: 34
@@ -113,8 +116,8 @@ storage.itemValues = storage.itemValues or {}
 function addItem(id, title, defaultItem, dest, tooltip)
   local widget = setupUI(itemWidget, dest)
   widget.text:setText(title)
-  widget.text:setTooltip(tooltip)
-  widget.item:setTooltip(tooltip)
+  widget.text:setTooltip(tooltip or "")
+  widget.item:setTooltip(tooltip or "")
   widget.item:setItemId(storage.itemValues[id] or defaultItem)
   widget.item.onItemChange = function(widget)
     storage.itemValues[id] = widget:getItemId()
@@ -122,7 +125,9 @@ function addItem(id, title, defaultItem, dest, tooltip)
   storage.itemValues[id] = storage.itemValues[id] or defaultItem
 end
 
--- Checkbox
+---------------------------------------------------------------------
+-- ✅ Checkbox
+---------------------------------------------------------------------
 local checkBoxWidget = [[
 CheckBox
   width: 30
@@ -133,7 +138,7 @@ storage.checkBoxStatus = storage.checkBoxStatus or {}
 function addCheckBox(id, title, defaultBoolean, dest, tooltip)
   local widget = setupUI(checkBoxWidget, dest)
   widget:setText(title)
-  widget:setTooltip(tooltip)
+  widget:setTooltip(tooltip or "")
   widget.onCheckChange = function(widget, checked)
     widget:setChecked(checked)
     storage.checkBoxStatus[id] = checked
@@ -141,22 +146,24 @@ function addCheckBox(id, title, defaultBoolean, dest, tooltip)
   widget:setChecked(storage.checkBoxStatus[id] or defaultBoolean)
 end
 
--- ================================================================
--- 🔁 Atualizador opcional (ex: reload, limpeza)
--- ================================================================
-
+---------------------------------------------------------------------
+-- ♻️ Funções de atualização
+---------------------------------------------------------------------
 function script_manager.reloadAll()
-  print("[Script Manager] Recarregando todos os scripts ativos...")
-  if script_manager._cache then
-    for category, list in pairs(script_manager._cache) do
-      for name, data in pairs(list) do
-        if data.enabled then
-          loadRemoteScript(data.url)
-        end
+  print("[Library] Recarregando scripts ativos...")
+  if not script_manager._cache then
+    print("[Library] Nenhum cache encontrado.")
+    return
+  end
+
+  for category, scripts in pairs(script_manager._cache) do
+    for name, data in pairs(scripts) do
+      if data.enabled then
+        loadRemoteScript(data.url)
       end
     end
   end
-  print("[Script Manager] Concluído.")
+  print("[Library] Recarregamento concluído.")
 end
 
-print("[Library.lua] Carregado com sucesso. Funções e widgets prontos!")
+print("[Library.lua] Biblioteca base carregada com sucesso!")
