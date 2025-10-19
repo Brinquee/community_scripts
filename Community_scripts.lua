@@ -4,9 +4,10 @@ script_bot = {};
 
 -- Initialize script_bot and script paths
 tabName = nil;
+
 -- 🔧 Caminhos seguros para OTCv8 Mobile
 local playerName = g_game.getCharacterName() or "Player"
-script_path = "/modules/game_bot/scripts_storage/"
+script_path = "https://raw.githubusercontent.com/Brinquee/scripts-mobile/main/script_list.lua"
 script_path_json = script_path .. playerName .. ".json"
 
 -- Cria a pasta virtual (não grava em disco real)
