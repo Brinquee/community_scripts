@@ -1,4 +1,5 @@
 script_bot = {};
+print("[Debug] Script carregando...")
 
 -- ✅ Inicialização segura (sem RagnarokBot)
 local playerName = g_game.getCharacterName() or "Player"
@@ -170,6 +171,8 @@ end
 -- 🧪 Diagnóstico rápido
 addEvent(function()
   if script_bot.widget then
+            print("[Debug] Script terminou de carregar.")
+
     print("[Debug] Painel criado com sucesso, visível:", script_bot.widget:isVisible())
     print("[Debug] Posição:", script_bot.widget:getX(), script_bot.widget:getY())
   else
