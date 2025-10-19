@@ -17,8 +17,8 @@ end
 actualVersion = 0.4;
 
 local libraryList = {
-    'https://raw.githubusercontent.com/brinquee/Community-Scripts/refs/heads/main/library.lua',
-    'https://raw.githubusercontent.com/brinquee/Community-Scripts/refs/heads/main/script_list.lua'
+    'https://raw.githubusercontent.com/brinquee/Community_Scripts/refs/heads/main/library.lua',
+    'https://raw.githubusercontent.com/brinquee/Community_Scripts/refs/heads/main/script_list.lua'
 }
 
 -- Load libraries
