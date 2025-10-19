@@ -16,7 +16,7 @@ storage.community_scripts_data = storage.community_scripts_data or {}
 actualVersion = 0.4
 
 local libraryList = {
-    'https://raw.githubusercontent.com/Brinquee/community_scripts/refs/heads/main/Library.lua',
+    'https://raw.githubusercontent.com/Brinquee/community_scripts/main/Library.lua',
     'https://raw.githubusercontent.com/Brinquee/community_scripts/refs/heads/main/script.list.lua'
 }
 
