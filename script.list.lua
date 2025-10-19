@@ -7,7 +7,7 @@ script_manager = {
         Dbo = {
 
             ['Reflect'] = {
-                url = 'https://raw.githubusercontent.com/brinquee/Community_Scripts/main/Scripts/Dbo/reflect.lua',
+                url = 'https://raw.githubusercontent.com/Brinquee/community_scripts/refs/heads/main/Scripts/Dbo/Reflect.lua',
                 description = 'Script de reflect.',
                 author = 'brinquee',
                 enabled = false
