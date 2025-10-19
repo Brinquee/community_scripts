@@ -164,5 +164,15 @@ MainWindow
         end
     end
 
-    carregarLista()
+        carregarLista()
 end
+
+-- 🧪 Diagnóstico rápido
+addEvent(function()
+  if script_bot.widget then
+    print("[Debug] Painel criado com sucesso, visível:", script_bot.widget:isVisible())
+    print("[Debug] Posição:", script_bot.widget:getX(), script_bot.widget:getY())
+  else
+    print("[Debug] script_bot.widget não existe (erro de criação).")
+  end
+end)
