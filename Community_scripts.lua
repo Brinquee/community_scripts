@@ -1,143 +1,246 @@
+-- ===================================================================
+-- 🧩 Community_scripts.lua - Gerenciador de Scripts Brinquee (v0.4 FINAL-FIX)
+-- ===================================================================
+-- ✅ Compatível com Library.lua e script.list.lua
+-- ✅ Armazenamento interno via storage (sem JSON externo)
+-- ✅ Botão fixo “Script Manager” na aba Main
+-- ✅ Painel flutuante funcional e dinâmico
+-- ===================================================================
+
 script_bot = {}
 
--- ===========================================================
+---------------------------------------------------------------------
 -- 🔧 Inicialização
--- ===========================================================
-setDefaultTab("Main")
+---------------------------------------------------------------------
+local tabName = getTab("Main") or setDefaultTab("Main")
 storage.community_scripts_data = storage.community_scripts_data or {}
+local actualVersion = 0.4
 
-actualVersion = 0.4
-
+---------------------------------------------------------------------
+-- 🌐 Links de biblioteca e lista
+---------------------------------------------------------------------
 local libraryList = {
-    "https://raw.githubusercontent.com/Brinquee/community_scripts/main/Library.lua",
-    "https://raw.githubusercontent.com/Brinquee/community_scripts/main/script.list.lua"
+    'https://raw.githubusercontent.com/Brinquee/community_scripts/main/Library.lua',
+    'https://raw.githubusercontent.com/Brinquee/community_scripts/main/script.list.lua'
 }
 
--- ===========================================================
--- 📦 Carregamento das bibliotecas remotas
--- ===========================================================
-for _, url in ipairs(libraryList) do
-    modules.corelib.HTTP.get(url, function(content, err)
-        if not content then
-            print("[Community Scripts] Falha ao baixar:", url, err or "erro desconhecido")
-            return
-        end
-        local ok, res = pcall(loadstring(content))
-        if not ok then
-            print("[Community Scripts] Erro executando:", url, res)
-        else
-            print("[Community Scripts] Carregado com sucesso:", url)
-        end
-    end)
-end
-
--- ===========================================================
--- 🔁 Inicialização retardada (garante _cache)
--- ===========================================================
-local function ensureCache()
-    if not script_manager then
-        print("[Community Scripts] Aguardando script_manager...")
-        return scheduleEvent(ensureCache, 500)
-    end
-
-    if not script_manager._cache or next(script_manager._cache) == nil then
-        print("[Community Scripts] Cache ainda vazio, recarregando lista...")
-        if script_manager.loadList then
-            pcall(script_manager.loadList)
-        end
-        return scheduleEvent(ensureCache, 1000)
-    end
-
-    print("[Community Scripts] Lista carregada, inicializando painel...")
-    script_bot.initUI()
-end
-scheduleEvent(ensureCache, 1000)
-
--- ===========================================================
--- 🪟 Interface visual
--- ===========================================================
+---------------------------------------------------------------------
+-- ⚙️ Função para inicializar o painel
+---------------------------------------------------------------------
 function script_bot.initUI()
-    if script_bot.widget then
-        script_bot.widget:destroy()
-    end
+    if script_bot.widget then return end
 
-    local ui = setupUI([[
+    -- Estrutura do painel
+    script_bot.widget = setupUI([[
 MainWindow
+  id: communityPanel
   !text: tr('Community Scripts')
   size: 300 400
   color: #d2cac5
-  background-color: #201a15
+  font: terminus-14px-bold
 
   TabBar
-    id: tabs
+    id: macrosOptions
     anchors.top: parent.top
     anchors.left: parent.left
     anchors.right: parent.right
     width: 180
 
   ScrollablePanel
-    id: list
-    anchors.top: tabs.bottom
-    anchors.bottom: parent.bottom
-    anchors.left: parent.left
-    anchors.right: parent.right
+    id: scriptList
     layout:
       type: verticalBox
-    vertical-scrollbar: scroll
+    anchors.fill: parent
+    margin-top: 25
+    margin-left: 4
+    margin-right: 12
+    margin-bottom: 30
+    vertical-scrollbar: scriptListScrollBar
 
   VerticalScrollBar
-    id: scroll
-    anchors.top: list.top
-    anchors.bottom: list.bottom
-    anchors.right: list.right
+    id: scriptListScrollBar
+    anchors.top: scriptList.top
+    anchors.bottom: scriptList.bottom
+    anchors.right: scriptList.right
+    step: 14
+    pixels-scroll: true
+    margin-right: -8
+
+  TextEdit
+    id: searchBar
+    anchors.left: parent.left
+    anchors.bottom: parent.bottom
+    width: 130
+    margin-left: 5
+    margin-bottom: 4
+
+  Button
+    id: closeButton
+    !text: tr('Close')
+    anchors.left: searchBar.right
+    anchors.bottom: parent.bottom
+    anchors.right: parent.right
+    size: 60 21
+    margin-left: 5
+    margin-right: 5
+    margin-bottom: 4
 ]], g_ui.getRootWidget())
 
-    script_bot.widget = ui
-    ui:setText("Community Scripts - " .. actualVersion)
-    ui:hide()
-
-    -- Botão no painel principal
-    if not script_bot.button then
-        script_bot.button = UI.Button("Community Scripts", function()
-            ui:setVisible(not ui:isVisible())
-            if ui:isVisible() then
-                script_bot.loadTabs()
-            end
-        end)
-        script_bot.button:setColor("#d2cac5")
-    end
-
-    script_bot.loadTabs()
+    script_bot.widget:hide()
+    print("[Script Manager] Painel carregado com sucesso!")
 end
 
--- ===========================================================
--- 🗂️ Carregar abas e scripts
--- ===========================================================
+---------------------------------------------------------------------
+-- 🧱 Função para criar o botão principal fixo na aba “Main”
+---------------------------------------------------------------------
+function script_bot.createMainButton()
+    if script_bot.button then return end
+
+    local tabMain = getTab("Main") or setDefaultTab("Main")
+
+    script_bot.button = UI.Button("Script Manager", function()
+        local ui = script_bot.widget
+        if not ui then return end
+        ui:setVisible(not ui:isVisible())
+        if ui:isVisible() then
+            script_bot.loadTabs()
+        end
+    end, tabMain)
+
+    script_bot.button:setColor("#d2cac5")
+    script_bot.button:setTooltip("Abrir o painel de scripts")
+    print("[Community Scripts] Botão principal criado na aba 'Main'")
+end
+
+---------------------------------------------------------------------
+-- 🔁 Atualiza a lista de scripts no painel
+---------------------------------------------------------------------
+function script_bot.updateScriptList(tabName)
+    if not script_bot.widget or not script_manager then return end
+    local scriptList = script_bot.widget.scriptList
+    scriptList:destroyChildren()
+
+    local macrosCategory = script_manager._cache[tabName]
+    if not macrosCategory then return end
+
+    for key, value in pairs(macrosCategory) do
+        local label = setupUI([[
+UIWidget
+  background-color: alpha
+  focusable: true
+  height: 30
+
+  $focus:
+    background-color: #00000055
+
+  Label
+    id: textToSet
+    font: terminus-14px-bold
+    anchors.verticalCenter: parent.verticalCenter
+    anchors.horizontalCenter: parent.horizontalCenter
+]], scriptList)
+
+        label.textToSet:setText(key)
+        label.textToSet:setColor(value.enabled and "green" or "#bdbdbd")
+        label:setTooltip("Descrição: " .. (value.description or "Sem descrição") .. "\nAutor: " .. (value.author or "Desconhecido"))
+
+        label.onClick = function(widget)
+            value.enabled = not value.enabled
+            script_bot.saveScripts()
+            label.textToSet:setColor(value.enabled and "green" or "#bdbdbd")
+
+            if value.enabled then
+                loadRemoteScript(value.url)
+            end
+        end
+    end
+end
+
+---------------------------------------------------------------------
+-- 🧩 Função principal de carregamento de abas
+---------------------------------------------------------------------
 function script_bot.loadTabs()
-    local tabs = script_bot.widget.tabs
-    local list = script_bot.widget.list
-    list:destroyChildren()
-    tabs:clearTabs()
+    local ui = script_bot.widget
+    if not ui or not script_manager or not script_manager._cache then return end
 
-    for category, scripts in pairs(script_manager._cache or {}) do
-        local tab = tabs:addTab(category)
-        tab:setTooltip("Scripts da categoria " .. category)
+    local tabBar = ui.macrosOptions
+    tabBar:clearTabs()
 
-        for name, data in pairs(scripts) do
-            local btn = UI.Button(name, function()
-                data.enabled = not data.enabled
-                if data.enabled then
-                    loadRemoteScript(data.url)
-                    btn:setColor("green")
-                    print("[Community Scripts] Ativado:", name)
-                else
-                    btn:setColor("#bdbdbd")
-                    print("[Community Scripts] Desativado:", name)
-                end
-            end, list)
-            btn:setColor(data.enabled and "green" or "#bdbdbd")
+    for categoryName in pairs(script_manager._cache) do
+        local tab = tabBar:addTab(categoryName)
+        tab:setId(categoryName)
+        tab.onStyleApply = function(widget)
+            if tabBar:getCurrentTab() == widget then
+                widget:setColor("green")
+            else
+                widget:setColor("white")
+            end
         end
     end
 
-    print("[Community Scripts] Abas e scripts carregados!")
+    tabBar.onTabChange = function(widget, tab)
+        script_bot.updateScriptList(tab:getText())
+    end
+
+    local firstTab = tabBar:getCurrentTab()
+    if firstTab then
+        script_bot.updateScriptList(firstTab:getText())
+    end
 end
+
+---------------------------------------------------------------------
+-- 💾 Leitura e salvamento interno
+---------------------------------------------------------------------
+function script_bot.readScripts()
+    if type(storage.community_scripts_data) == "table" and next(storage.community_scripts_data) ~= nil then
+        script_manager = storage.community_scripts_data
+    else
+        storage.community_scripts_data = script_manager
+    end
+end
+
+function script_bot.saveScripts()
+    storage.community_scripts_data = script_manager
+end
+
+---------------------------------------------------------------------
+-- 🔄 Reinicialização
+---------------------------------------------------------------------
+function script_bot.restartStorage()
+    storage.community_scripts_data = {}
+    reload()
+end
+
+---------------------------------------------------------------------
+-- 🕓 Carregamento das bibliotecas
+---------------------------------------------------------------------
+for _, library in ipairs(libraryList) do
+    modules._G.HTTP.get(library, function(content, error)
+        if not content then
+            print("[Community Scripts] Falha ao carregar:", library)
+            return
+        end
+        local ok, err = pcall(loadstring(content))
+        if not ok then
+            print("[Community Scripts] Erro:", err)
+            return
+        end
+    end)
+end
+
+---------------------------------------------------------------------
+-- ⏳ Aguarda lista de scripts e inicia UI
+---------------------------------------------------------------------
+local function waitForScripts()
+    if not script_manager or not script_manager._cache or next(script_manager._cache) == nil then
+        print("[Community Scripts] Aguardando lista de scripts carregar...")
+        scheduleEvent(waitForScripts, 1000)
+        return
+    end
+
+    script_bot.initUI()
+    script_bot.createMainButton()
+    print("[Community Scripts] Lista carregada, painel pronto.")
+end
+
+scheduleEvent(waitForScripts, 1200)
