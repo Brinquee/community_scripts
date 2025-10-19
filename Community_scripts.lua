@@ -1,48 +1,41 @@
 script_bot = {}
 
--- Inicialização segura (sem RagnarokBot)
+-- Inicialização
 setDefaultTab('Main')
 local tabName = getTab('Main') or setDefaultTab('Main')
 
--- Sistema de armazenamento interno (sem arquivos)
-storage.script_manager = storage.script_manager or {
-  _cache = {},
-  actualVersion = 0.4
-}
-
+-- Armazenamento simples, sem Ragnarok nem JSON
+storage.script_manager = storage.script_manager or { _cache = {}, actualVersion = 0.4 }
 local script_manager = storage.script_manager
 local actualVersion = 0.4
 
+-- Links das bibliotecas (mantidos)
 local libraryList = {
     'https://raw.githubusercontent.com/Brinquee/community_scripts/refs/heads/main/Library.lua',
     'https://raw.githubusercontent.com/Brinquee/community_scripts/refs/heads/main/script.list.lua'
 }
 
--- 🔒 Carregamento seguro das bibliotecas
 for _, library in ipairs(libraryList) do
     modules._G.HTTP.get(library, function(content, error)
         if content and not error then
             local ok, res = pcall(loadstring(content))
-            if not ok then
-                print("Erro ao carregar:", res)
-            end
+            if not ok then print("Erro ao carregar:", res) end
         else
             print("Erro ao baixar biblioteca:", library)
         end
     end)
 end
 
--- 🧱 Painel (mantido igual)
+-- Criação do painel
 if not script_bot.widget then
+    local root = g_ui.getRootWidget() -- ✅ correção principal
     local script_add = [[
 UIWidget
   background-color: alpha
   focusable: true
   height: 30
-
   $focus:
     background-color: #00000055
-
   Label
     id: textToSet
     font: terminus-14px-bold
@@ -50,12 +43,16 @@ UIWidget
     anchors.horizontalCenter: parent.horizontalCenter
 ]]
 
+    -- ✅ painel criado no root
     script_bot.widget = setupUI([[
 MainWindow
   !text: tr('Community Scripts')
   font: terminus-14px-bold
   color: #d2cac5
   size: 300 400
+  draggable: true
+  moveable: true
+  background-color: #2a2a2a
 
   TabBar
     id: macrosOptions
@@ -84,15 +81,6 @@ MainWindow
     pixels-scroll: true
     margin-right: -10
 
-  HorizontalSeparator
-    id: sep
-    anchors.top: parent.top
-    anchors.bottom: parent.bottom
-    anchors.left: parent.left
-    anchors.right: parent.right
-    margin-left: 10
-    margin-top: 6
-
   TextEdit
     id: searchBar
     anchors.left: parent.left
@@ -111,7 +99,7 @@ MainWindow
     margin-bottom: 1
     margin-right: 5
     margin-left: 5
-]], g_ui.getRootWidget())
+]], root)
 
     script_bot.widget:hide()
     script_bot.widget:setText('Community Scripts - ' .. actualVersion)
@@ -132,7 +120,7 @@ MainWindow
         script_bot.widget:hide()
     end
 
-    -- Filtro
+    -- Filtro de texto
     script_bot.widget.searchBar.onTextChange = function(widget, text)
         for _, child in pairs(script_bot.widget.scriptList:getChildren()) do
             local scriptName = child:getId()
@@ -144,16 +132,7 @@ MainWindow
         end
     end
 
-    -- Funções de salvar e carregar (sem disco)
-    script_bot.readScripts = function()
-        script_manager = storage.script_manager
-    end
-
-    script_bot.saveScripts = function()
-        storage.script_manager = script_manager
-    end
-
-    -- Monta lista (simples para teste)
+    -- Carrega lista de exemplo
     local function carregarLista()
         script_bot.widget.scriptList:destroyChildren()
         local exemplos = {
