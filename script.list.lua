@@ -1,58 +1,58 @@
 script_manager = script_manager or {}
+script_manager.actualVersion = 0.4
+
 script_manager._cache = {
   ["DBO"] = {
     ["Reflect"] = {
       url = "https://raw.githubusercontent.com/Brinquee/community_scripts/main/Scripts/Dbo/Reflect.lua",
+      description = "Ativa reflexão de dano automaticamente.",
       author = "Brinquee",
-      description = "Reflete dano automaticamente.",
       enabled = false
-    }
+    },
   },
-  ["NTO"] = {
-    ["Bug Map Kunai"] = {
-      url = "https://raw.githubusercontent.com/Brinquee/community_scripts/main/Scripts/Nto/Bug_map_kunai.lua",
-      author = "Brinquee",
-      description = "Escape com kunai no NTO.",
-      enabled = false
-    }
-  },
-  ["PvP"] = {
-    ["Follow Attack"] = {
-      url = "https://raw.githubusercontent.com/Brinquee/community_scripts/main/Scripts/PvP/follow_attack.lua",
-      author = "Brinquee",
-      description = "Segue e ataca o alvo.",
-      enabled = false
-    }
-  },
-  ["Tibia"] = {
-    ["Utana Vid"] = {
-      url = "https://raw.githubusercontent.com/Brinquee/community_scripts/main/Scripts/Tibia/utana_vid.lua",
-      author = "Brinquee",
-      description = "Mantém invisibilidade.",
-      enabled = false
-    }
-  },
+
   ["Healing"] = {
     ["Regeneration"] = {
       url = "https://raw.githubusercontent.com/Brinquee/community_scripts/main/Scripts/Healing/Regeneration.lua",
+      description = "Cura quando a vida cair abaixo da % definida.",
       author = "Brinquee",
-      description = "Cura gradual automática.",
       enabled = false
-    }
+    },
   },
+
+  ["Tibia"] = {
+    ["Utana Vid"] = {
+      url = "https://raw.githubusercontent.com/Brinquee/community_scripts/main/Scripts/Tibia/utana_vid.lua",
+      description = "Mantém invisibilidade ativa com mana mínima.",
+      author = "Brinquee (adapt.)",
+      enabled = false
+    },
+  },
+
   ["Utilities"] = {
     ["Dance"] = {
       url = "https://raw.githubusercontent.com/Brinquee/community_scripts/main/Scripts/Utilities/dance.lua",
-      author = "Brinquee",
-      description = "Dança em loop.",
+      description = "Gira aleatoriamente em intervalos configuráveis.",
+      author = "Brinquee (adapt.)",
       enabled = false
-    }
+    },
+  },
+
+  ["NTO"] = {
+    ["Bug Map Kunai"] = {
+      url = "https://raw.githubusercontent.com/Brinquee/community_scripts/main/Scripts/Nto/bug_map_kunai.lua",
+      description = "Bug map via kunai com atalhos WASD/QEZX.",
+      author = "Brinquee (adapt.)",
+      enabled = false
+    },
+  },
+
+  ["PvP"] = {
+    ["Follow Attack"] = {
+      url = "https://raw.githubusercontent.com/Brinquee/community_scripts/main/Scripts/PvP/follow_attack.lua",
+      description = "Segue o alvo e executa portas/escadas/jumps/custom IDs.",
+      author = "Brinquee (base: Victor Neox)",
+      enabled = false
+    },
   }
 }
-
-function script_manager.loadList()
-  print("[script.list.lua] Lista recarregada.")
-  return script_manager._cache
-end
-
-print("[script.list.lua] Lista de scripts carregada com sucesso.")
