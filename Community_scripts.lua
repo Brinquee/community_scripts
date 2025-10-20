@@ -289,8 +289,6 @@ local function waitForScripts()
     end
 end
 
-scheduleEvent(waitForScripts, 1200)
-
 -- ==== DEBUG COMMUNITY SCRIPTS ====
 print("---- DEBUG INÍCIO ----")
 print("Tem script_manager:", script_manager ~= nil)
@@ -305,4 +303,6 @@ else
 end
 print("---- DEBUG FIM ----")
 
+
+scheduleEvent(waitForScripts, 1200)
 
