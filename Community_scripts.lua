@@ -1,6 +1,6 @@
 -- Community_scripts.lua (versão adaptada p/ Brinquee repo + storage interno)
 script_bot = {}
-
+ 
 ----------------------------------------------------------------------
 -- Inicialização (sem arquivo JSON)
 ----------------------------------------------------------------------
