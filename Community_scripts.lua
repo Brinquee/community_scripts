@@ -289,19 +289,6 @@ local function waitForScripts()
     end
 end
 
--- ==== DEBUG COMMUNITY SCRIPTS ====
-print("---- DEBUG INÍCIO ----")
-print("Tem script_manager:", script_manager ~= nil)
-print("Tem cache:", script_manager and script_manager._cache ~= nil)
-if script_manager and script_manager._cache then
-  print("Categorias encontradas:")
-  for k in pairs(script_manager._cache) do
-    print("  -", k)
-  end
-else
-  print("Nenhum _cache ainda (script.list.lua pode não ter carregado).")
-end
-print("---- DEBUG FIM ----")
 
 
 scheduleEvent(waitForScripts, 1200)
