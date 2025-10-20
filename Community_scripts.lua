@@ -1,145 +1,76 @@
--- Community_scripts.lua (diagnóstico com fallback)
+-- Community_scripts.lua (versão adaptada p/ Brinquee repo + storage interno)
 script_bot = {}
-local VERSION = 0.4
 
--- --- UI base (sempre aparece) ---
-local tabName = getTab('HP') or getTab('Main') or setDefaultTab('Main')
+----------------------------------------------------------------------
+-- Inicialização (sem arquivo JSON)
+----------------------------------------------------------------------
+tabName = nil
+setDefaultTab('Main')
+tabName = getTab('Main') or setDefaultTab('Main')
 
-local function buildUI()
-  if script_bot.widget then return end
-  local wnd = setupUI([[
-MainWindow
-  !text: tr('Community Scripts')
-  font: terminus-14px-bold
-  color: #d2cac5
-  size: 360 460
+-- Versão
+actualVersion = 0.4
 
-  TabBar
-    id: macrosOptions
-    anchors.top: parent.top
-    anchors.left: parent.left
-    anchors.right: parent.right
+-- Persistência interna
+storage.community_scripts_data = storage.community_scripts_data or {}
 
-  ScrollablePanel
-    id: scriptList
-    layout:
-      type: verticalBox
-    anchors.fill: parent
-    margin-top: 25
-    margin-left: 2
-    margin-right: 15
-    margin-bottom: 34
-    vertical-scrollbar: scriptListScrollBar
+----------------------------------------------------------------------
+-- URLs das bibliotecas (SEU repositório)
+----------------------------------------------------------------------
+local libraryList = {
+  'https://raw.githubusercontent.com/Brinquee/community_scripts/main/Library.lua',
+  'https://raw.githubusercontent.com/Brinquee/community_scripts/main/script.list.lua'
+}
 
-  VerticalScrollBar
-    id: scriptListScrollBar
-    anchors.top: scriptList.top
-    anchors.bottom: scriptList.bottom
-    anchors.right: scriptList.right
-    step: 14
-    pixels-scroll: true
-    margin-right: -10
-
-  TextEdit
-    id: searchBar
-    anchors.left: parent.left
-    anchors.bottom: parent.bottom
-    width: 200
-
-  Button
-    id: closeButton
-    !text: tr('Close')
-    font: cipsoftFont
-    anchors.right: parent.right
-    anchors.left: searchBar.right
-    anchors.bottom: parent.bottom
-    size: 50 21
-    margin-left: 5
-    margin-right: 5
-]], g_ui.getRootWidget())
-
-  wnd:hide()
-  wnd:setText('Community Scripts - ' .. VERSION)
-  script_bot.widget = wnd
-
-  script_bot.buttonWidget = UI.Button('CS Manager (NEW)', function()
-    if wnd:isVisible() then wnd:hide() else wnd:show(); wnd:raise(); wnd:focus() end
-  end, tabName)
-  script_bot.buttonWidget:setColor('#d2cac5')
-
-  wnd.closeButton.onClick = function() wnd:hide() end
-  wnd.searchBar.onTextChange = function(_, text)
-    for _, child in pairs(wnd.scriptList:getChildren()) do
-      local id = (child:getId() or ''):lower()
-      child:setVisible(id:find((text or ''):lower()) ~= nil)
+----------------------------------------------------------------------
+-- Loader das bibliotecas
+----------------------------------------------------------------------
+local function loadUrl(url, onOk)
+  modules.corelib.HTTP.get(url, function(content, err)
+    if not content or #content == 0 then
+      print('[Community Scripts] Falha ao baixar:', url, err or 'sem conteúdo')
+      return
     end
+    local ok, res = pcall(loadstring(content))
+    if not ok then
+      print('[Community Scripts] Erro executando lib:', res)
+      return
+    end
+    if onOk then onOk() end
+  end)
+end
+
+for _, url in ipairs(libraryList) do
+  loadUrl(url)
+end
+
+----------------------------------------------------------------------
+-- Leitura/Gravação usando storage
+----------------------------------------------------------------------
+script_bot.readScripts = function()
+  local data = script_manager
+  if type(storage.community_scripts_data) == 'table' and next(storage.community_scripts_data) then
+    data = storage.community_scripts_data
+  else
+    storage.community_scripts_data = data
   end
-  print('[CS] UI pronta.')
+  script_manager = data
 end
 
-buildUI()
-
-local function clearList()
-  if script_bot.widget then script_bot.widget.scriptList:destroyChildren() end
+script_bot.saveScripts = function()
+  storage.community_scripts_data = script_manager
 end
 
-local function addLabel(txt, color)
-  local l = UI.Label(txt)
-  if color then l:setColor(color) end
-  script_bot.widget.scriptList:addChild(l)
-  return l
+script_bot.restartStorage = function()
+  storage.community_scripts_data = {}
+  reload()
 end
 
-local loading = addLabel('Carregando lista de scripts...', 'yellow')
-
--- --- URLs (main) ---
-local LIB_URL  = 'https://raw.githubusercontent.com/Brinquee/community_scripts/main/Library.lua'
-local LIST_URL = 'https://raw.githubusercontent.com/Brinquee/community_scripts/main/script.list.lua'
-
--- --- Baixar/rodar ---
-local pending = 2
-
-local function finishOne()
-  pending = pending - 1
-  if pending ~= 0 then return end
-
-  -- Espera cache (ou cai no fallback)
-  local tries = 0
-  local function populateOrRetry()
-    tries = tries + 1
-    local ok = (script_manager and script_manager._cache and next(script_manager._cache))
-    print(string.format('[CS] tentativa %d, cache pronto? %s', tries, ok and 'SIM' or 'NÃO'))
-
-    if not ok and tries == 5 then
-      -- Fallback demo
-      print('[CS] Fallback DEMO ativado: mostrando categorias/itens fictícios.')
-      script_manager = script_manager or {}
-      script_manager._cache = {
-        Dbo = { ['Reflect'] = {url='about:blank', description='Demo - reflect', author='demo', enabled=false}},
-        Healing = { ['Regeneration'] = {url='about:blank', description='Demo - regen', author='demo', enabled=false}},
-        PvP = { ['Follow Attack'] = {url='about:blank', description='Demo - follow', author='demo', enabled=false}},
-        Tibia = { ['Utana Vid'] = {url='about:blank', description='Demo - invis', author='demo', enabled=false}},
-        Nto = { ['Bug Map Kunai'] = {url='about:blank', description='Demo - kunai', author='demo', enabled=false}},
-        Utilities = { ['Dance'] = {url='about:blank', description='Demo - dance', author='demo', enabled=false}},
-      }
-    end
-
-    if script_manager and script_manager._cache and next(script_manager._cache) then
-      if loading and loading:getParent() then loading:destroy() end
-      -- Abas
-      script_bot.widget.macrosOptions:clearTabs()
-      local cats = {}
-      for cname,_ in pairs(script_manager._cache) do table.insert(cats, cname) end
-      table.sort(cats)
-      for _, cname in ipairs(cats) do
-        local tab = script_bot.widget.macrosOptions:addTab(cname)
-        tab:setId(cname); tab:setTooltip(cname..' Macros')
-        tab.onStyleApply = function(w)
-          if script_bot.widget.macrosOptions:getCurrentTab() == w then w:setColor('green') else w:setColor('white') end
-        end
-      end
-
-      local rowLayout = [[
+----------------------------------------------------------------------
+-- UI
+----------------------------------------------------------------------
+if not script_bot.widget then
+  local script_item_row = [[
 UIWidget
   background-color: alpha
   focusable: true
@@ -155,63 +86,222 @@ UIWidget
     anchors.horizontalCenter: parent.horizontalCenter
 ]]
 
-      local function populateList(cat)
-        clearList()
-        local data = script_manager._cache[cat] or {}
-        for key, val in pairs(data) do
-          local row = setupUI(rowLayout, script_bot.widget.scriptList)
-          row:setId(key)
-          row.textToSet:setText(key)
-          row.textToSet:setColor(val.enabled and 'green' or '#bdbdbd')
-          row:setTooltip(('Description: %s\nAuthor: %s'):format(val.description or '-', val.author or '-'))
-          row.onClick = function()
-            val.enabled = not val.enabled
-            row.textToSet:setColor(val.enabled and 'green' or '#bdbdbd')
-            if val.enabled and val.url and val.url ~= 'about:blank' then
-              modules.corelib.HTTP.get(val.url, function(scr, err)
-                if not scr then print('[CS] erro ao baixar macro', key, err or '') return end
-                local ok2, res2 = pcall(loadstring(scr))
-                if not ok2 then print('[CS] erro ao executar macro', key, res2) else print('[CS] macro OK', key) end
-              end)
-            end
-          end
-        end
-      end
+  script_bot.widget = setupUI([[
+MainWindow
+  !text: tr('Community Scripts')
+  font: terminus-14px-bold
+  color: #d2cac5
+  size: 300 400
 
-      local current = script_bot.widget.macrosOptions:getCurrentTab()
-      if current then populateList(current.text) end
-      script_bot.widget.macrosOptions.onTabChange = function(_, t)
-        populateList(t:getText())
-        local txt = script_bot.widget.searchBar:getText() or ''
-        script_bot.widget.searchBar.onTextChange(nil, txt)
-      end
+  TabBar
+    id: macrosOptions
+    anchors.top: parent.top
+    anchors.left: parent.left
+    anchors.right: parent.right
+    width: 180
+
+  ScrollablePanel
+    id: scriptList
+    layout:
+      type: verticalBox
+    anchors.fill: parent
+    margin-top: 25
+    margin-left: 2
+    margin-right: 15
+    margin-bottom: 30
+    vertical-scrollbar: scriptListScrollBar
+
+  VerticalScrollBar
+    id: scriptListScrollBar
+    anchors.top: scriptList.top
+    anchors.bottom: scriptList.bottom
+    anchors.right: scriptList.right
+    step: 14
+    pixels-scroll: true
+    margin-right: -10
+
+  HorizontalSeparator
+    id: sep
+    anchors.top: parent.top
+    anchors.bottom: parent.bottom
+    anchors.left: parent.left
+    anchors.right: parent.right
+    margin-left: 10
+    margin-top: 6
+
+  TextEdit
+    id: searchBar
+    anchors.left: parent.left
+    anchors.bottom: parent.bottom
+    margin-right: 5
+    width: 130
+
+  Button
+    id: closeButton
+    !text: tr('Close')
+    font: cipsoftFont
+    anchors.right: parent.right
+    anchors.left: searchBar.right
+    anchors.bottom: parent.bottom
+    size: 45 21
+    margin-bottom: 1
+    margin-right: 5
+    margin-left: 5
+]], g_ui.getRootWidget())
+
+  script_bot.widget:hide()
+  script_bot.widget:setText('Community Scripts - ' .. actualVersion)
+
+  -- Label de status/atualização
+  local statusLabel = UI.Label('Carregando lista de scripts...')
+  statusLabel:setColor('yellow')
+  statusLabel:setId('statusLabel')
+  statusLabel:setParent(script_bot.widget.scriptList)
+
+  -- Botão principal
+  script_bot.buttonWidget = UI.Button('CS Manager (NEW)', function()
+    if script_bot.widget:isVisible() then
+      reload()
     else
-      if tries < 5 then
-        scheduleEvent(populateOrRetry, 700)
-      else
-        if loading then loading:setText('Falha ao carregar lista. Veja console.'); loading:setColor('red') end
+      script_bot.widget:show()
+      script_bot.widget.macrosOptions:selectPrevTab()
+    end
+  end, tabName)
+  script_bot.buttonWidget:setColor('#d2cac5')
+
+  -- Botão “update”
+  script_bot.buttonRemoveJson = UI.Button('Update Files', function()
+    script_bot.restartStorage()
+  end, tabName)
+  script_bot.buttonRemoveJson:setColor('#d2cac5')
+  script_bot.buttonRemoveJson:setTooltip('Click here only when there is an update.')
+  script_bot.buttonRemoveJson:hide()
+
+  -- Fechar
+  script_bot.widget.closeButton:setTooltip('Close and add macros.')
+  script_bot.widget.closeButton.onClick = function()
+    reload()
+    script_bot.widget:hide()
+  end
+
+  -- Busca
+  script_bot.widget.searchBar:setTooltip('Search macros.')
+  script_bot.widget.searchBar.onTextChange = function(_, text)
+    for _, child in pairs(script_bot.widget.scriptList:getChildren()) do
+      if child:getId() ~= 'statusLabel' then
+        local name = child:getId() or ''
+        if name:lower():find(text:lower()) then child:show() else child:hide() end
       end
     end
   end
-  populateOrRetry()
+
+  ------------------------------------------------------------------
+  -- Render da lista
+  ------------------------------------------------------------------
+  function script_bot.updateScriptList(currentTabName)
+    script_bot.widget.scriptList:destroyChildren()
+
+    local macrosCategory = script_manager and script_manager._cache and script_manager._cache[currentTabName]
+    if not macrosCategory then
+      local lbl = UI.Label('Nenhum script nesta categoria.')
+      lbl:setColor('#bdbdbd')
+      lbl:setParent(script_bot.widget.scriptList)
+      return
+    end
+
+    for key, value in pairs(macrosCategory) do
+      local row = setupUI(script_item_row, script_bot.widget.scriptList)
+      row.textToSet:setText(key)
+      row.textToSet:setColor(value.enabled and 'green' or '#bdbdbd')
+      row:setTooltip('Description: ' .. (value.description or '-') .. '\nAuthor: ' .. (value.author or '-'))
+      row.onClick = function()
+        value.enabled = not value.enabled
+        row.textToSet:setColor(value.enabled and 'green' or '#bdbdbd')
+        script_bot.saveScripts()
+        -- Se quiser carregar imediatamente quando marcar:
+        -- if value.enabled then loadRemoteScript(value.url) end
+      end
+      row:setId(key)
+    end
+  end
+
+  ------------------------------------------------------------------
+  -- Monta abas e carrega scripts marcados
+  ------------------------------------------------------------------
+  script_bot.onLoading = function()
+    script_bot.widget.scriptList:destroyChildren()
+    local cache = script_manager and script_manager._cache or {}
+
+    local categories = {}
+    for cat, list in pairs(cache) do
+      table.insert(categories, cat)
+      for _, v in pairs(list) do
+        if v.enabled and v.url then
+          modules.corelib.HTTP.get(v.url, function(scr)
+            if scr and #scr > 0 then
+              local ok, res = pcall(loadstring(scr))
+              if not ok then print('[CS] Erro macro:', res) end
+            end
+          end)
+        end
+      end
+    end
+
+    -- cria abas
+    for _, cat in ipairs(categories) do
+      local tab = script_bot.widget.macrosOptions:addTab(cat)
+      tab:setId(cat)
+      tab:setTooltip(cat .. ' Macros')
+      tab.onStyleApply = function(widget)
+        if script_bot.widget.macrosOptions:getCurrentTab() == widget then
+          widget:setColor('green')
+        else
+          widget:setColor('white')
+        end
+      end
+    end
+
+    -- seleciona e popula
+    local cur = script_bot.widget.macrosOptions:getCurrentTab()
+    if cur and cur.text then
+      script_bot.updateScriptList(cur.text)
+    end
+
+    script_bot.widget.macrosOptions.onTabChange = function(_, t)
+      script_bot.updateScriptList(t:getText())
+      script_bot.widget.searchBar:onTextChange(script_bot.widget.searchBar, script_bot.widget.searchBar:getText())
+    end
+  end
 end
 
-local function fetchAndRun(name, url)
-  print('[CS] Baixando '..name..': '..url)
-  modules._G.HTTP.get(url, function(content, err)
-    if not content then
-      print('[CS] ERRO baixar '..name..': '..(err or '(sem detalhe)'))
-      finishOne(); return
+----------------------------------------------------------------------
+-- Espera o script.list.lua montar o _cache
+----------------------------------------------------------------------
+local function waitForCache()
+  if not (script_manager and script_manager._cache and next(script_manager._cache)) then
+    -- mostra status no botão/tab também
+    if script_bot and script_bot.buttonWidget then
+      script_bot.buttonWidget:setTooltip('Carregando lista de scripts...')
     end
-    local ok, res = pcall(loadstring(content))
-    if not ok then
-      print('[CS] ERRO executar '..name..': '..tostring(res))
-    else
-      print('[CS] OK '..name)
-    end
-    finishOne()
-  end)
+    scheduleEvent(waitForCache, 800)
+    return
+  end
+
+  -- pronto
+  if script_bot and script_bot.buttonWidget then
+    script_bot.buttonWidget:setTooltip('Abrir Community Scripts')
+  end
+
+  script_bot.readScripts()
+  script_bot.onLoading()
+
+  if script_manager.actualVersion ~= actualVersion then
+    script_bot.buttonRemoveJson:show()
+  end
+
+  -- tira o “carregando…”
+  local lbl = script_bot.widget.scriptList:getChildById('statusLabel')
+  if lbl then lbl:destroy() end
 end
 
-fetchAndRun('Library.lua',     'https://raw.githubusercontent.com/Brinquee/community_scripts/main/Library.lua')
-fetchAndRun('script.list.lua', 'https://raw.githubusercontent.com/Brinquee/community_scripts/main/script.list.lua')
+scheduleEvent(waitForCache, 1000)
