@@ -1,27 +1,27 @@
 -- ===========================================================
--- Community Scripts - Painel com Tabs + Lista (diagnóstico 2)
--- Remove âncoras inválidas (nada de HorizontalSeparator)
+-- Community Scripts (NEW) - Painel com Tabs + Lista (isolado)
+-- Evita conflito com painel antigo ("Painel simples aberto!")
+-- Botão: "CS Manager (NEW)"
 -- ===========================================================
 
 setDefaultTab('Main')
 local ROOT_TAB = getTab('Main') or setDefaultTab('Main')
 
 script_bot = script_bot or {}
-storage.scriptManager = storage.scriptManager or { pos=nil, visible=false }
+storage.cs_new_ui = storage.cs_new_ui or { pos=nil, visible=false }
 
-local function ok(...)  print('[CS2][OK]', ...) end
-local function err(...) print('[CS2][ERRO]', ...) end
-local function log(...) print('[CS2]', ...) end
+local function ok(...)  print('[CS-NEW][OK]', ...) end
+local function err(...) print('[CS-NEW][ERRO]', ...) end
+local function log(...) print('[CS-NEW]', ...) end
 
--- ---------- UI layout (sem o HorizontalSeparator bugado) ----------
+-- UI principal (sem âncoras quebradas)
 local MAIN_UI = [[
 MainWindow
-  id: scriptManagerWin
+  id: csNewWindow
   text: Community Scripts - 0.4
   size: 320 420
   color: #d2cac5
   background-color: #3a2d1e
-  opacity: 0.98
   focusable: true
   padding: 6
 
@@ -53,7 +53,6 @@ MainWindow
     anchors.right: parent.right
     step: 14
     pixels-scroll: true
-    margin-right: 0
 
   TextEdit
     id: searchBar
@@ -89,36 +88,32 @@ UIWidget
     margin-left: 8
 ]]
 
--- -------------- helpers ----------------
+-- cria/recupera janela
 local function build_window()
-  if script_bot.widget and not script_bot.widget:isDestroyed() then
-    pcall(function() script_bot.widget:destroy() end)
+  if script_bot.csNewWin and not script_bot.csNewWin:isDestroyed() then
+    pcall(function() script_bot.csNewWin:destroy() end)
   end
   local okSetup, winOrMsg = pcall(function()
     return setupUI(MAIN_UI, g_ui.getRootWidget())
   end)
-  if not okSetup then
-    err('setupUI falhou:', winOrMsg); return nil
-  end
+  if not okSetup then err('setupUI falhou:', winOrMsg) return nil end
   local w = winOrMsg
-  if not w then err('setupUI retornou nil'); return nil end
+  if not w then err('setupUI retornou nil') return nil end
 
-  -- centraliza e restaura posição
+  -- posição
   addEvent(function()
     if w.centerInParent then pcall(function() w:centerInParent() end) end
-    if storage.scriptManager.pos then pcall(function() w:move(storage.scriptManager.pos) end) end
+    if storage.cs_new_ui.pos then pcall(function() w:move(storage.cs_new_ui.pos) end) end
   end)
-
-  -- salvar posição ao mover
   local oldMove = w.move
   w.move = function(self, pos)
     if oldMove then oldMove(self, pos) end
-    storage.scriptManager.pos = pos
+    storage.cs_new_ui.pos = pos
   end
 
-  -- close
+  -- fechar
   w.closeButton.onClick = function()
-    w:hide(); storage.scriptManager.visible = false; ok('Fechado.')
+    w:hide(); storage.cs_new_ui.visible = false; ok('Fechado')
   end
 
   -- busca
@@ -126,21 +121,20 @@ local function build_window()
     if script_bot.filterScripts then script_bot.filterScripts(text) end
   end
 
-  script_bot.widget = w
+  script_bot.csNewWin = w
   return w
 end
 
 local function ensure_window()
-  if script_bot.widget and not script_bot.widget:isDestroyed() then return script_bot.widget end
+  if script_bot.csNewWin and not script_bot.csNewWin:isDestroyed() then return script_bot.csNewWin end
   return build_window()
 end
 
--- --------- dataset: usa script_manager._cache se existir, senão mock ---------
+-- pega categorias do cache, ou mocka “Test”
 local function get_categories()
   if script_manager and script_manager._cache and next(script_manager._cache) then
     return script_manager._cache
   end
-  -- mock para garantir que a UI apareça algo
   return {
     Test = {
       ['Exemplo A'] = { description='Item de teste A', author='you', enabled=false, url='' },
@@ -149,28 +143,20 @@ local function get_categories()
   }
 end
 
--- --------- UI logic ---------
+-- lógica de lista + filtro
 function script_bot.filterScripts(filterText)
-  local list = script_bot.widget and script_bot.widget.scriptList
-  if not list then return end
+  local w = script_bot.csNewWin; if not w then return end
+  local list = w.scriptList
   for _, child in pairs(list:getChildren()) do
     local name = child:getId() or ''
-    if name:lower():find((filterText or ''):lower()) then
-      child:show()
-    else
-      child:hide()
-    end
+    if name:lower():find((filterText or ''):lower()) then child:show() else child:hide() end
   end
 end
 
 function script_bot.updateScriptList(tabName)
   local w = ensure_window(); if not w then return end
   w.scriptList:destroyChildren()
-
-  local cats = get_categories()
-  local macros = cats[tabName]
-  if not macros then return end
-
+  local macros = get_categories()[tabName]; if not macros then return end
   for key, value in pairs(macros) do
     local row = setupUI(ITEM_UI, w.scriptList)
     row:setId(key)
@@ -181,17 +167,16 @@ function script_bot.updateScriptList(tabName)
       value.enabled = not value.enabled
       row.textToSet:setColor(value.enabled and 'green' or '#bdbdbd')
       ok('Toggled', key, '=>', tostring(value.enabled))
+      -- aqui depois podemos dar loadRemoteScript(value.url) se quiser
     end
   end
 end
 
 function script_bot.onLoading()
   local w = ensure_window(); if not w then return end
-
-  -- cria abas a partir das categorias
   w.macrosOptions:clear()
   local cats = get_categories()
-  local firstTab = nil
+  local firstTab
   for categoryName, _ in pairs(cats) do
     local tab = w.macrosOptions:addTab(categoryName)
     tab:setId(categoryName)
@@ -200,48 +185,40 @@ function script_bot.onLoading()
     end
     if not firstTab then firstTab = categoryName end
   end
-
-  -- listeners
   w.macrosOptions.onTabChange = function(_, tab)
     script_bot.updateScriptList(tab:getText())
     script_bot.filterScripts(w.searchBar:getText())
   end
-
-  -- seleciona a primeira aba
-  if firstTab then
-    script_bot.updateScriptList(firstTab)
-  end
+  if firstTab then script_bot.updateScriptList(firstTab) end
 end
 
--- ---------- botão ----------
+-- botão sem conflito
 local function create_button()
-  if script_bot.button and not script_bot.button:isDestroyed() then
-    pcall(function() script_bot.button:destroy() end)
+  if script_bot.csNewBtn and not script_bot.csNewBtn:isDestroyed() then
+    pcall(function() script_bot.csNewBtn:destroy() end)
   end
-  script_bot.button = UI.Button('Script Manager', function()
-    local w = ensure_window()
-    if not w then return end
+  script_bot.csNewBtn = UI.Button('CS Manager (NEW)', function()
+    local w = ensure_window(); if not w then return end
     if w:isVisible() then
-      w:hide(); storage.scriptManager.visible = false
+      w:hide(); storage.cs_new_ui.visible = false
     else
-      w:show(); storage.scriptManager.visible = true
+      w:show(); storage.cs_new_ui.visible = true
       script_bot.onLoading()
     end
   end, ROOT_TAB)
-  ok('Botão criado.')
+  ok('Botão criado: CS Manager (NEW)')
 end
 
--- ---------- init ----------
+-- init depois que o UI raiz existir
 local function init_when_ready()
   if not g_ui or not g_ui.getRootWidget() then
     scheduleEvent(init_when_ready, 150); return
   end
   create_button()
-  if storage.scriptManager.visible then
-    local w = ensure_window()
-    if w then w:show(); script_bot.onLoading() end
+  if storage.cs_new_ui.visible then
+    local w = ensure_window(); if w then w:show(); script_bot.onLoading() end
   end
-  ok('UI pronta. Clique no botão para abrir o painel com tabs.')
+  ok('Pronto. Clique no botão "CS Manager (NEW)".')
 end
 
 init_when_ready()
