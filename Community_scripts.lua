@@ -1,86 +1,66 @@
--- ===================================================================
--- 🧩 Community_scripts.lua - Brinquee (v0.4 PATCH)
--- ===================================================================
+-- ===========================================================
+-- Community Scripts (Loader + Painel) - Brinquee
+-- - Sem ragnarokBot, sem JSON, sem paths locais
+-- - Usa Library.lua (widgets/helpers) e script.list.lua do seu repo
+-- - Painel centralizado com abas, busca e toggle de macros
+-- ===========================================================
 
-script_bot = {}
+-- ---------- Setup básico ----------
+setDefaultTab('Main')
+local ROOT_TAB = getTab('Main') or setDefaultTab('Main')
 
--- === Inicialização sem ragnarok/json ===
-local tabName = getTab('Main') or setDefaultTab('Main')
-local actualVersion = 0.4
-
--- guarda interna (sem arquivo .json)
-storage.community_scripts_data = storage.community_scripts_data or {}
-
--- funções compatíveis com o resto do código
-script_bot.readScripts = function()
-  local data = script_manager
-  if type(storage.community_scripts_data) == "table" and next(storage.community_scripts_data) ~= nil then
-    data = storage.community_scripts_data
-  else
-    storage.community_scripts_data = data
-  end
-  script_manager = data
-end
-
-script_bot.saveScripts = function()
-  storage.community_scripts_data = script_manager
-end
-
-script_bot.restartStorage = function()
-  storage.community_scripts_data = {}
-  reload()
-end
-
--- === Bibliotecas remotas: seu repositório ===
-local libraryList = {
-  'https://raw.githubusercontent.com/Brinquee/community_scripts/main/Library.lua',
-  'https://raw.githubusercontent.com/Brinquee/community_scripts/main/script.list.lua'
+-- URLs do seu repositório (atenção ao case!)
+local REMOTE = {
+  LIB  = 'https://raw.githubusercontent.com/Brinquee/community_scripts/main/Library.lua',
+  LIST = 'https://raw.githubusercontent.com/Brinquee/community_scripts/main/script.list.lua',
 }
 
--- === Carregar bibliotecas (Library.lua + script.list.lua) ===
-for _, url in ipairs(libraryList) do
+-- Estado local
+script_bot = script_bot or {}
+storage.community_scripts_data = storage.community_scripts_data or {}
+
+-- ---------- Helpers de log ----------
+local function logOK(...)  print('[CommunityScripts]', ...) end
+local function logERR(...) print('[CommunityScripts][ERRO]', ...) end
+
+-- ---------- Baixa e executa um arquivo remoto ----------
+local function fetchAndRun(url, tag)
   modules.corelib.HTTP.get(url, function(content, err)
-    if not content then
-      print("[Community Scripts] Falha ao baixar:", url, err or "erro")
-      return
-    end
-    local ok, res = pcall(loadstring(content))
-    if not ok then
-      print("[Community Scripts] Erro executando:", url, res)
-    else
-      print("[Community Scripts] Carregado:", url)
-    end
+    if not content then logERR('Falha ao baixar', tag or url, '=>', err or 'sem detalhe'); return end
+    local ok, fn = pcall(loadstring, content)
+    if not ok then logERR('Compilando', tag or url, '=>', fn); return end
+    local ok2, res = pcall(fn)
+    if not ok2 then logERR('Executando', tag or url, '=>', res); return end
+    logOK('OK ->', tag or url)
   end)
 end
 
--- === UI: layout de cada item da lista ===
-local script_add = [[
-UIWidget
-  background-color: alpha
-  focusable: true
-  height: 30
+-- ---------- Carrega Library + Lista ----------
+fetchAndRun(REMOTE.LIB,  'Library.lua')
+fetchAndRun(REMOTE.LIST, 'script.list.lua')
 
-  $focus:
-    background-color: #00000055
+-- ===========================================================
+-- Painel Script Manager (madeira, centralizado, arrastável)
+-- ===========================================================
+-- (Se a sua skin não suportar draggable/moveable, mantém centralizado)
 
-  Label
-    id: textToSet
-    font: terminus-14px-bold
-    anchors.verticalCenter: parent.verticalCenter
-    anchors.horizontalCenter: parent.horizontalCenter
-]]
+local function buildScriptPanel()
+  if script_bot.widget and not script_bot.widget:isDestroyed() then
+    script_bot.widget:destroy()
+  end
 
--- === Criar janela principal (oculta inicialmente) ===
-local function createPanelIfNeeded()
-  if script_bot.widget then return end
-
-  script_bot.widget = setupUI([[
+  local ui = [[
 MainWindow
-  id: communityPanel
+  id: scriptManagerWin
   !text: tr('Community Scripts')
-  font: terminus-14px-bold
-  color: #d2cac5
   size: 300 400
+  color: #d2cac5
+  background-color: #3a2d1e
+  opacity: 0.95
+  draggable: true
+  moveable: true
+  focusable: true
+  padding: 8
 
   TabBar
     id: macrosOptions
@@ -94,10 +74,10 @@ MainWindow
     layout:
       type: verticalBox
     anchors.fill: parent
-    margin-top: 25
-    margin-left: 2
-    margin-right: 15
-    margin-bottom: 30
+    margin-top: 28
+    margin-left: 4
+    margin-right: 16
+    margin-bottom: 36
     vertical-scrollbar: scriptListScrollBar
 
   VerticalScrollBar
@@ -114,12 +94,11 @@ MainWindow
     anchors.left: parent.left
     anchors.bottom: parent.bottom
     margin-right: 5
-    width: 130
+    width: 160
 
   Button
     id: closeButton
     !text: tr('Close')
-    font: cipsoftFont
     anchors.right: parent.right
     anchors.left: searchBar.right
     anchors.bottom: parent.bottom
@@ -127,177 +106,188 @@ MainWindow
     margin-bottom: 1
     margin-right: 5
     margin-left: 5
-]], g_ui.getRootWidget())
+]]
+  local w = setupUI(ui, g_ui.getRootWidget())
+  script_bot.widget = w
+  w:hide()
 
-  script_bot.widget:hide()
-  script_bot.widget:setText('Community Scripts - ' .. actualVersion)
+  -- centraliza (com fallback)
+  addEvent(function()
+    if w.centerInParent then
+      pcall(function() w:centerInParent() end)
+    else
+      local root = g_ui.getRootWidget()
+      local x = (root:getWidth() - w:getWidth())/2
+      local y = (root:getHeight() - w:getHeight())/2
+      w:move({x=x,y=y})
+    end
+  end)
 
-  -- botão fechar
-  script_bot.widget.closeButton:setTooltip('Close and add macros.')
-  script_bot.widget.closeButton.onClick = function()
-    reload()
-    script_bot.widget:hide()
+  -- salva posição quando mover (se a skin permitir)
+  storage.scriptManager = storage.scriptManager or { pos=nil, visible=false }
+  if storage.scriptManager.pos then
+    w:move(storage.scriptManager.pos)
+  end
+  local oldMove = w.move
+  w.move = function(self, pos)
+    if oldMove then oldMove(self, pos) end
+    storage.scriptManager.pos = pos
+  end
+
+  -- fechar
+  w.closeButton.onClick = function()
+    w:hide()
+    storage.scriptManager.visible = false
   end
 
   -- busca
-  script_bot.widget.searchBar:setTooltip('Search macros.')
-  script_bot.widget.searchBar.onTextChange = function(_, text)
-    script_bot.filterScripts(text)
-  end
-
-  print("[Script Manager] Painel carregado com sucesso!")
-end
-
--- === Filtro de busca ===
-function script_bot.filterScripts(filterText)
-  for _, child in pairs(script_bot.widget.scriptList:getChildren()) do
-    local scriptName = child:getId() or ""
-    if scriptName:lower():find((filterText or ""):lower()) then
-      child:show()
-    else
-      child:hide()
+  w.searchBar:setTooltip('Search macros')
+  w.searchBar.onTextChange = function(_, text)
+    if not w or w:isDestroyed() then return end
+    for _, child in pairs(w.scriptList:getChildren()) do
+      local id = child:getId() or ''
+      if id:lower():find(text:lower()) then child:show() else child:hide() end
     end
   end
-end
 
--- === Preencher lista da aba selecionada ===
-function script_bot.updateScriptList(categoryName)
-  local ui = script_bot.widget
-  if not ui or not script_manager or not script_manager._cache then return end
+  -- item da lista
+  local itemLayout = [[
+UIWidget
+  height: 28
+  margin-top: 3
+  background-color: alpha
+  focusable: true
 
-  ui.scriptList:destroyChildren()
-  local macrosCategory = script_manager._cache[categoryName]
-  if not macrosCategory then return end
+  $focus:
+    background-color: #00000055
 
-  for key, value in pairs(macrosCategory) do
-    local row = setupUI(script_add, ui.scriptList)
-    row.textToSet:setText(key)
-    row.textToSet:setColor(value.enabled and 'green' or '#bdbdbd')
-    row:setTooltip('Description: ' .. (value.description or 'N/A') .. '\nAuthor: ' .. (value.author or 'N/A'))
-    row:setId(key)
+  Label
+    id: textToSet
+    font: terminus-14px-bold
+    anchors.verticalCenter: parent.verticalCenter
+    anchors.left: parent.left
+    margin-left: 8
 
-    row.onClick = function()
-      value.enabled = not value.enabled
-      script_bot.saveScripts()
-      row.textToSet:setColor(value.enabled and 'green' or '#bdbdbd')
+  UILabel
+    id: author
+    anchors.right: parent.right
+    anchors.verticalCenter: parent.verticalCenter
+    margin-right: 8
+    color: #bdbdbd
+]]
 
-      if value.enabled then
-        -- carrega o script remoto ao ativar
-        if loadRemoteScript then
-          loadRemoteScript(value.url)
-        else
-          modules.corelib.HTTP.get(value.url, function(script)
-            if script then pcall(loadstring(script)) end
-          end)
+  -- atualiza lista ao trocar de aba
+  function script_bot.updateScriptList(tabText)
+    if not script_manager or not script_manager._cache then return end
+    w.scriptList:destroyChildren()
+    local list = script_manager._cache[tabText]
+    if not list then return end
+
+    for name, data in pairs(list) do
+      local row = setupUI(itemLayout, w.scriptList)
+      row:setId(name)
+      row.textToSet:setText(name)
+      row.textToSet:setColor(data.enabled and 'green' or '#d2cac5')
+      row.author:setText(data.author and ('by ' .. data.author) or '')
+      row:setTooltip(string.format("Description: %s\nURL: %s",
+                      data.description or '-', data.url or '-'))
+
+      row.onClick = function()
+        data.enabled = not data.enabled
+        row.textToSet:setColor(data.enabled and 'green' or '#d2cac5')
+        -- persiste em storage (sem JSON)
+        storage.community_scripts_data = storage.community_scripts_data or {}
+        storage.community_scripts_data._cache = storage.community_scripts_data._cache or {}
+        storage.community_scripts_data._cache[tabText] = storage.community_scripts_data._cache[tabText] or {}
+        storage.community_scripts_data._cache[tabText][name] = data
+
+        -- carrega quando ligar
+        if data.enabled and data.url and type(loadRemoteScript) == 'function' then
+          loadRemoteScript(data.url)
         end
-      end
-    end
-  end
-end
-
--- === Montar as abas a partir do _cache ===
-function script_bot.onLoading()
-  local ui = script_bot.widget
-  if not ui or not script_manager or not script_manager._cache then return end
-
-  ui.scriptList:destroyChildren()
-  ui.macrosOptions:clearTabs()
-
-  local categories = {}
-  for categoryName, categoryList in pairs(script_manager._cache) do
-    table.insert(categories, categoryName)
-    -- carrega scripts já marcados como enabled
-    for _, value in pairs(categoryList) do
-      if value.enabled and value.url then
-        modules.corelib.HTTP.get(value.url, function(script)
-          if script then pcall(loadstring(script)) end
-        end)
       end
     end
   end
 
   -- cria abas
-  for _, categoryName in ipairs(categories) do
-    local tab = ui.macrosOptions:addTab(categoryName)
-    tab:setId(categoryName)
-    tab:setTooltip(categoryName .. " Macros")
-    tab.onStyleApply = function(widget)
-      if ui.macrosOptions:getCurrentTab() == widget then
-        widget:setColor('green')
-      else
-        widget:setColor('white')
+  function script_bot.buildTabs()
+    if not script_manager or not script_manager._cache then return end
+    w.macrosOptions:destroyChildren()
+    for categoryName, _ in pairs(script_manager._cache) do
+      local tab = w.macrosOptions:addTab(categoryName)
+      tab:setId(categoryName)
+      tab:setTooltip(categoryName .. ' Macros')
+      tab.onStyleApply = function(widget)
+        if w.macrosOptions:getCurrentTab() == widget then widget:setColor('green') else widget:setColor('white') end
       end
+    end
+
+    local current = w.macrosOptions:getCurrentTab()
+    if current and current.text then
+      script_bot.updateScriptList(current.text)
+    end
+
+    w.macrosOptions.onTabChange = function(_, tab)
+      script_bot.updateScriptList(tab:getText())
+      w.searchBar.onTextChange(w.searchBar, w.searchBar:getText() or '')
     end
   end
 
-  -- seleção inicial e callback
-  local currentTab = ui.macrosOptions:getCurrentTab()
-  if currentTab and currentTab.text then
-    script_bot.updateScriptList(currentTab.text)
-  end
-
-  ui.macrosOptions.onTabChange = function(_, tab)
-    script_bot.updateScriptList(tab:getText())
-    script_bot.filterScripts(ui.searchBar:getText())
-  end
+  logOK('Painel pronto.')
+  return w
 end
 
--- === Botões "Script Manager" e "Update Files" fixos na aba Main ===
-local function ensureTopButtons()
-  if not script_bot.buttonWidget then
-    script_bot.buttonWidget = UI.Button('Script Manager', function()
-      if not script_bot.widget then return end
-      local vis = script_bot.widget:isVisible()
-      script_bot.widget:setVisible(not vis)
-      if not vis then
-        script_bot.onLoading()
+-- ---------- Botão na toolbar ----------
+local function ensureToolbarButton()
+  if script_bot.button and not script_bot.button:isDestroyed() then
+    script_bot.button:destroy()
+  end
+  script_bot.button = UI.Button('Script Manager', function()
+    if not script_bot.widget or script_bot.widget:isDestroyed() then
+      buildScriptPanel()
+    end
+    if script_bot.widget:isVisible() then
+      script_bot.widget:hide()
+      storage.scriptManager.visible = false
+    else
+      script_bot.widget:show()
+      storage.scriptManager.visible = true
+      -- reforça centralização na abertura
+      addEvent(function()
+        if script_bot.widget.centerInParent then
+          pcall(function() script_bot.widget:centerInParent() end)
+        end
+      end)
+      -- se ainda não criou abas/lista (ex.: primeira vez)
+      if script_manager and script_manager._cache then
+        script_bot.buildTabs()
       end
-    end, tabName)
-    script_bot.buttonWidget:setColor('#d2cac5')
-  end
-
-  if not script_bot.buttonRemoveJson then
-    script_bot.buttonRemoveJson = UI.Button('Update Files', function()
-      script_bot.restartStorage()
-    end, tabName)
-    script_bot.buttonRemoveJson:setColor('#d2cac5')
-    script_bot.buttonRemoveJson:setTooltip('Click here only when there is an update.')
-    script_bot.buttonRemoveJson:hide()
-  end
+    end
+  end, ROOT_TAB)
 end
 
--- === Espera a lista (_cache) ficar pronta antes de montar UI ===
-local function waitForScripts()
+-- ---------- Inicialização orquestrada ----------
+local function initWhenReady()
+  -- espera UI
+  if not g_ui or not g_ui.getRootWidget() then
+    scheduleEvent(initWhenReady, 200); return
+  end
+  -- espera Library + Lista popularem 'script_manager._cache'
   if not script_manager or not script_manager._cache or next(script_manager._cache) == nil then
-    print("[Community Scripts] Aguardando lista de scripts carregar...")
-    return scheduleEvent(waitForScripts, 1000)
+    logOK('Aguardando script.list.lua carregar...')
+    scheduleEvent(initWhenReady, 300); return
   end
 
-  createPanelIfNeeded()
-  ensureTopButtons()
-  script_bot.readScripts()
-  script_bot.onLoading()
+  ensureToolbarButton()
+  buildScriptPanel()
+  script_bot.buildTabs()
 
-  -- aviso de versão
-  if script_manager.actualVersion and script_manager.actualVersion ~= actualVersion then
-    if script_bot.buttonRemoveJson then script_bot.buttonRemoveJson:show() end
+  -- restaura visibilidade
+  if storage.scriptManager and storage.scriptManager.visible then
+    script_bot.widget:show()
   end
 
-  print("[Community Scripts] Lista carregada. UI pronta.")
+  logOK('Inicializado: categorias detectadas:', tostring(next(script_manager._cache) ~= nil))
 end
 
-scheduleEvent(waitForScripts, 1000)
-
--- ==== DEBUG opcional (pode deixar) ====
-print("---- DEBUG INÍCIO ----")
-print("Tem script_manager:", script_manager ~= nil)
-print("Tem cache:", script_manager and script_manager._cache ~= nil)
-if script_manager and script_manager._cache then
-  print("Categorias encontradas:")
-  for k in pairs(script_manager._cache) do
-    print("  -", k)
-  end
-else
-  print("Nenhum _cache ainda (script.list.lua pode não ter carregado).")
-end
-print("---- DEBUG FIM ----")
+initWhenReady()
