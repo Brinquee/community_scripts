@@ -274,12 +274,12 @@ MainWindow
   end
 end
 
-----------------------------------------------------------------------
--- Espera o script.list.lua montar o _cache
-----------------------------------------------------------------------
+-- ===========================================================
+-- ⏳ Espera o script.list.lua montar o _cache antes de popular a UI
+-- ===========================================================
 local function waitForCache()
-  if not (script_manager and script_manager._cache and next(script_manager._cache)) then
-    -- mostra status no botão/tab também
+  -- ainda não chegou ou veio vazio?
+  if not script_manager or not script_manager._cache or next(script_manager._cache) == nil then
     if script_bot and script_bot.buttonWidget then
       script_bot.buttonWidget:setTooltip('Carregando lista de scripts...')
     end
@@ -287,21 +287,30 @@ local function waitForCache()
     return
   end
 
-  -- pronto
+  -- chegou: atualiza dica do botão e monta a UI
   if script_bot and script_bot.buttonWidget then
     script_bot.buttonWidget:setTooltip('Abrir Community Scripts')
   end
 
-  script_bot.readScripts()
-  script_bot.onLoading()
-
-  if script_manager.actualVersion ~= actualVersion then
-    script_bot.buttonRemoveJson:show()
+  if script_bot and script_bot.readScripts then
+    script_bot.readScripts()
+  end
+  if script_bot and script_bot.onLoading then
+    script_bot.onLoading()
   end
 
-  -- tira o “carregando…”
-  local lbl = script_bot.widget.scriptList:getChildById('statusLabel')
-  if lbl then lbl:destroy() end
+  -- botão de “Update Files” se versão mudou
+  if script_manager and script_manager.actualVersion and script_manager.actualVersion ~= actualVersion then
+    if script_bot and script_bot.buttonRemoveJson then
+      script_bot.buttonRemoveJson:show()
+    end
+  end
+
+  -- remove eventual label “carregando…”
+  if script_bot and script_bot.widget and script_bot.widget.scriptList then
+    local lbl = script_bot.widget.scriptList:getChildById('statusLabel')
+    if lbl then lbl:destroy() end
+  end
 end
 
 scheduleEvent(waitForCache, 1000)
