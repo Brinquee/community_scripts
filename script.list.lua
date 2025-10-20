@@ -1,41 +1,17 @@
--- script.list.lua  (mínimo viável)
+-- ===============================
+-- script.list.lua  (carrega a lista de macros do seu repositório)
+-- ===============================
+
 script_manager = script_manager or {}
+
 script_manager.actualVersion = 0.4
 
 script_manager._cache = {
-
   Dbo = {
     ['Reflect'] = {
       url = 'https://raw.githubusercontent.com/Brinquee/community_scripts/main/Scripts/Dbo/Reflect.lua',
-      description = 'Script de reflect.',
-      author = 'brinquee',
-      enabled = false
-    },
-  },
-
-  Nto = {
-    ['Bug Map Kunai'] = {
-      url = 'https://raw.githubusercontent.com/Brinquee/community_scripts/main/Scripts/Nto/Bug_map_kunai.lua',
-      description = 'Bug map kunai (PC).',
-      author = 'brinquee',
-      enabled = false
-    },
-  },
-
-  Tibia = {
-    ['Utana Vid'] = {
-      url = 'https://raw.githubusercontent.com/Brinquee/community_scripts/main/Scripts/Tibia/utana_vid.lua',
-      description = 'Script de utana vid.',
-      author = 'brinquee',
-      enabled = false
-    },
-  },
-
-  PvP = {
-    ['Follow Attack'] = {
-      url = 'https://raw.githubusercontent.com/Brinquee/community_scripts/main/Scripts/PvP/follow_attack.lua',
-      description = 'Seguir e atacar o target (protótipo).',
-      author = 'victorneox / brinquee',
+      description = 'Macro de Reflect (DBO).',
+      author = 'Brinquee',
       enabled = false
     },
   },
@@ -43,8 +19,35 @@ script_manager._cache = {
   Healing = {
     ['Regeneration'] = {
       url = 'https://raw.githubusercontent.com/Brinquee/community_scripts/main/Scripts/Healing/Regeneration.lua',
-      description = 'Usa spell de regen por % de vida.',
-      author = 'brinquee',
+      description = 'Casta a spell de regeneration abaixo da % configurada.',
+      author = 'Brinquee',
+      enabled = false
+    },
+  },
+
+  Nto = {
+    ['Bug Map Kunai'] = {
+      url = 'https://raw.githubusercontent.com/Brinquee/community_scripts/main/Scripts/Nto/Bug_map_kunai.lua',
+      description = 'Bug map com kunai (NTO).',
+      author = 'Brinquee',
+      enabled = false
+    },
+  },
+
+  PvP = {
+    ['Follow Attack'] = {
+      url = 'https://raw.githubusercontent.com/Brinquee/community_scripts/main/Scripts/PvP/follow_attack.lua',
+      description = 'Protótipo de follow attack (abre portas/jumps etc.).',
+      author = 'Victor Neox / Brinquee',
+      enabled = false
+    },
+  },
+
+  Tibia = {
+    ['Utana Vid'] = {
+      url = 'https://raw.githubusercontent.com/Brinquee/community_scripts/main/Scripts/Tibia/utana_vid.lua',
+      description = 'Casta Utana Vid com mana mínima configurada.',
+      author = 'VivoDibra / Brinquee',
       enabled = false
     },
   },
@@ -52,11 +55,17 @@ script_manager._cache = {
   Utilities = {
     ['Dance'] = {
       url = 'https://raw.githubusercontent.com/Brinquee/community_scripts/main/Scripts/Utilities/dance.lua',
-      description = 'Fica dançando (gira aleatório).',
-      author = 'brinquee',
+      description = 'Gira aleatoriamente (macro de teste).',
+      author = 'Brinquee',
       enabled = false
     },
   },
-
 }
-print('[script.list.lua] cache carregado: categorias =', (script_manager and script_manager._cache) and 'OK' or 'NIL')
+
+-- Log de depuração: conta quantas categorias e itens existem
+local catCount, itemCount = 0, 0
+for _, cat in pairs(script_manager._cache) do
+  catCount = catCount + 1
+  for _ in pairs(cat) do itemCount = itemCount + 1 end
+end
+print(string.format('[script.list.lua] OK - categorias: %d, itens: %d', catCount, itemCount))
