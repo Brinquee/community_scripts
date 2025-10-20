@@ -18,8 +18,8 @@ storage.community_scripts_data = storage.community_scripts_data or {}
 -- URLs das bibliotecas (SEU repositório)
 ----------------------------------------------------------------------
 local libraryList = {
-  'https://raw.githubusercontent.com/Brinquee/community_scripts/main/Library.lua',
-  'https://raw.githubusercontent.com/Brinquee/community_scripts/main/script.list.lua'
+  'https://raw.githubusercontent.com/Brinquee/community_scripts/main/script.list.lua',
+  'https://raw.githubusercontent.com/Brinquee/community_scripts/main/Library.lua'
 }
 
 ----------------------------------------------------------------------
