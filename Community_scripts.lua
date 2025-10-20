@@ -1,43 +1,85 @@
--- ===================================================================
--- 🧩 Community_scripts.lua - Gerenciador de Scripts Brinquee (v0.4 FINAL-FIX)
--- ===================================================================
--- ✅ Compatível com Library.lua e script.list.lua
--- ✅ Armazenamento interno via storage (sem JSON externo)
--- ✅ Botão fixo “Script Manager” na aba Main
--- ✅ Painel flutuante funcional e dinâmico
--- ===================================================================
+script_bot = {};
 
-script_bot = {}
+-- ===========================================================
+-- 🔧 Inicialização (sem ragnarokBot.path e sem JSON externo)
+-- ===========================================================
+tabName = nil
+setDefaultTab('Main')
+tabName = getTab('Main') or setDefaultTab('Main')
 
----------------------------------------------------------------------
--- 🔧 Inicialização
----------------------------------------------------------------------
-local tabName = getTab("Main") or setDefaultTab("Main")
+-- Persiste dados internamente (sem arquivos externos)
 storage.community_scripts_data = storage.community_scripts_data or {}
-local actualVersion = 0.4
 
----------------------------------------------------------------------
--- 🌐 Links de biblioteca e lista
----------------------------------------------------------------------
+-- ===========================================================
+-- ⚙️ Versão e bibliotecas remotas (seu repositório)
+-- ===========================================================
+actualVersion = 0.4
+
 local libraryList = {
     'https://raw.githubusercontent.com/Brinquee/community_scripts/main/Library.lua',
     'https://raw.githubusercontent.com/Brinquee/community_scripts/main/script.list.lua'
 }
 
----------------------------------------------------------------------
--- ⚙️ Função para inicializar o painel
----------------------------------------------------------------------
-function script_bot.initUI()
-    if script_bot.widget then return end
+-- ===========================================================
+-- 📦 Carregamento das bibliotecas
+-- ===========================================================
+for _, library in ipairs(libraryList) do
+    modules._G.HTTP.get(library, function(content, error)
+        if content then
+            loadstring(content)()
+            if not error then
+                if script_manager then
+                    local _G = modules._G
+                    local g_resources = _G.g_resources
 
-    -- Estrutura do painel
-    script_bot.widget = setupUI([[
+                    -- ===============================================
+                    -- 📁 Funções de leitura/gravação (usando storage)
+                    -- ===============================================
+                    script_bot.readScripts = function()
+                        local data = script_manager
+                        if type(storage.community_scripts_data) == "table" and next(storage.community_scripts_data) ~= nil then
+                            data = storage.community_scripts_data
+                        else
+                            storage.community_scripts_data = data
+                        end
+                        script_manager = data
+                    end
+
+                    script_bot.saveScripts = function()
+                        storage.community_scripts_data = script_manager
+                    end
+
+                    script_bot.restartStorage = function()
+                        storage.community_scripts_data = {}
+                        reload()
+                    end
+
+                    -- ===================================================
+                    -- 🪟 Interface do Script Manager
+                    -- ===================================================
+                    if not script_bot.widget then
+                        local script_add = [[
+UIWidget
+  background-color: alpha
+  focusable: true
+  height: 30
+
+  $focus:
+    background-color: #00000055
+
+  Label
+    id: textToSet
+    font: terminus-14px-bold
+    anchors.verticalCenter: parent.verticalCenter
+    anchors.horizontalCenter: parent.horizontalCenter
+]]
+
+                        script_bot.widget = setupUI([[
 MainWindow
-  id: communityPanel
   !text: tr('Community Scripts')
-  size: 300 400
-  color: #d2cac5
   font: terminus-14px-bold
+  color: #d2cac5
+  size: 300 400
 
   TabBar
     id: macrosOptions
@@ -52,11 +94,11 @@ MainWindow
       type: verticalBox
     anchors.fill: parent
     margin-top: 25
-    margin-left: 4
-    margin-right: 12
+    margin-left: 2
+    margin-right: 15
     margin-bottom: 30
     vertical-scrollbar: scriptListScrollBar
-
+      
   VerticalScrollBar
     id: scriptListScrollBar
     anchors.top: scriptList.top
@@ -64,173 +106,176 @@ MainWindow
     anchors.right: scriptList.right
     step: 14
     pixels-scroll: true
-    margin-right: -8
+    margin-right: -10
+
+  HorizontalSeparator
+    id: sep
+    anchors.top: parent.top
+    anchors.bottom: parent.bottom
+    anchors.left: parent.left
+    anchors.right: parent.right
+    margin-left: 10
+    margin-top: 6
 
   TextEdit
     id: searchBar
     anchors.left: parent.left
     anchors.bottom: parent.bottom
+    margin-right: 5
     width: 130
-    margin-left: 5
-    margin-bottom: 4
 
   Button
     id: closeButton
     !text: tr('Close')
+    font: cipsoftFont
+    anchors.right: parent.right
     anchors.left: searchBar.right
     anchors.bottom: parent.bottom
-    anchors.right: parent.right
-    size: 60 21
-    margin-left: 5
+    size: 45 21
+    margin-bottom: 1
     margin-right: 5
-    margin-bottom: 4
+    margin-left: 5
 ]], g_ui.getRootWidget())
 
-    script_bot.widget:hide()
-    print("[Script Manager] Painel carregado com sucesso!")
-end
+                        script_bot.widget:hide()
+                        script_bot.widget:setText('Community Scripts - ' .. actualVersion)
 
----------------------------------------------------------------------
--- 🧱 Função para criar o botão principal fixo na aba “Main”
----------------------------------------------------------------------
-function script_bot.createMainButton()
-    if script_bot.button then return end
+                        local updateLabel = UI.Label('Community Scripts. \n New version available, click "Update Files". \nVersion: ' .. actualVersion)
+                        updateLabel:setColor('yellow')
+                        updateLabel:hide()
 
-    local tabMain = getTab("Main") or setDefaultTab("Main")
+                        -- Botão principal
+                        script_bot.buttonWidget = UI.Button('Script Manager', function()
+                            if script_bot.widget:isVisible() then
+                                reload()
+                            else
+                                script_bot.widget:show()
+                                script_bot.widget.macrosOptions:selectPrevTab()
+                            end
+                        end, tabName)
+                        script_bot.buttonWidget:setColor('#d2cac5')
 
-    script_bot.button = UI.Button("Script Manager", function()
-        local ui = script_bot.widget
-        if not ui then return end
-        ui:setVisible(not ui:isVisible())
-        if ui:isVisible() then
-            script_bot.loadTabs()
-        end
-    end, tabMain)
+                        -- Botão de atualização
+                        script_bot.buttonRemoveJson = UI.Button('Update Files', function()
+                            script_bot.restartStorage()
+                        end, tabName)
+                        script_bot.buttonRemoveJson:setColor('#d2cac5')
+                        script_bot.buttonRemoveJson:setTooltip('Click here only when there is an update.')
+                        script_bot.buttonRemoveJson:hide()
 
-    script_bot.button:setColor("#d2cac5")
-    script_bot.button:setTooltip("Abrir o painel de scripts")
-    print("[Community Scripts] Botão principal criado na aba 'Main'")
-end
+                        -- Botão de fechar
+                        script_bot.widget.closeButton:setTooltip('Close and add macros.')
+                        script_bot.widget.closeButton.onClick = function(widget)
+                            reload()
+                            script_bot.widget:hide()
+                        end
 
----------------------------------------------------------------------
--- 🔁 Atualiza a lista de scripts no painel
----------------------------------------------------------------------
-function script_bot.updateScriptList(tabName)
-    if not script_bot.widget or not script_manager then return end
-    local scriptList = script_bot.widget.scriptList
-    scriptList:destroyChildren()
+                        -- Barra de busca
+                        script_bot.widget.searchBar:setTooltip('Search macros.')
+                        script_bot.widget.searchBar.onTextChange = function(widget, text)
+                            script_bot.filterScripts(text)
+                        end
 
-    local macrosCategory = script_manager._cache[tabName]
-    if not macrosCategory then return end
+                        -- Filtro de scripts
+                        function script_bot.filterScripts(filterText)
+                            for _, child in pairs(script_bot.widget.scriptList:getChildren()) do
+                                local scriptName = child:getId()
+                                if scriptName:lower():find(filterText:lower()) then
+                                    child:show()
+                                else
+                                    child:hide()
+                                end
+                            end
+                        end
 
-    for key, value in pairs(macrosCategory) do
-        local label = setupUI([[
-UIWidget
-  background-color: alpha
-  focusable: true
-  height: 30
+                        -- Atualiza lista
+                        function script_bot.updateScriptList(tabName)
+                            script_bot.widget.scriptList:destroyChildren()
+                            local macrosCategory = script_manager._cache[tabName]
 
-  $focus:
-    background-color: #00000055
+                            if macrosCategory then
+                                for key, value in pairs(macrosCategory) do
+                                    local label = setupUI(script_add, script_bot.widget.scriptList)
+                                    label.textToSet:setText(key)
+                                    label.textToSet:setColor('#bdbdbd')
+                                    label:setTooltip('Description: ' .. value.description .. '\nAuthor: ' .. value.author)
 
-  Label
-    id: textToSet
-    font: terminus-14px-bold
-    anchors.verticalCenter: parent.verticalCenter
-    anchors.horizontalCenter: parent.horizontalCenter
-]], scriptList)
+                                    label.onClick = function(widget)
+                                        value.enabled = not value.enabled
+                                        script_bot.saveScripts()
+                                        label.textToSet:setColor(value.enabled and 'green' or '#bdbdbd')
+                                        if value.enabled then
+                                            -- loadRemoteScript(value.url)
+                                        end
+                                    end
 
-        label.textToSet:setText(key)
-        label.textToSet:setColor(value.enabled and "green" or "#bdbdbd")
-        label:setTooltip("Descrição: " .. (value.description or "Sem descrição") .. "\nAutor: " .. (value.author or "Desconhecido"))
+                                    if value.enabled then
+                                        label.textToSet:setColor('green')
+                                    end
 
-        label.onClick = function(widget)
-            value.enabled = not value.enabled
-            script_bot.saveScripts()
-            label.textToSet:setColor(value.enabled and "green" or "#bdbdbd")
+                                    label:setId(key)
+                                end
+                            end
+                        end
 
-            if value.enabled then
-                loadRemoteScript(value.url)
+                        -- Carregamento
+                        script_bot.onLoading = function()
+                            script_bot.widget.scriptList:destroyChildren()
+
+                            local categories = {}
+                            for categoryName, categoryList in pairs(script_manager._cache) do
+                                table.insert(categories, categoryName)
+                                for key, value in pairs(categoryList) do
+                                    if value.enabled then
+                                        modules.corelib.HTTP.get(value.url, function(script)
+                                            assert(loadstring(script))()
+                                        end)
+                                    end
+                                end
+                            end
+
+                            for _, categoryName in ipairs(categories) do
+                                local tab = script_bot.widget.macrosOptions:addTab(categoryName)
+                                tab:setId(categoryName)
+                                tab:setTooltip(categoryName .. ' Macros')
+                                tab.onStyleApply = function(widget)
+                                    if script_bot.widget.macrosOptions:getCurrentTab() == widget then
+                                        widget:setColor('green')
+                                    else
+                                        widget:setColor('white')
+                                    end
+                                end
+                            end
+
+                            local currentTab = script_bot.widget.macrosOptions:getCurrentTab().text
+                            script_bot.updateScriptList(currentTab)
+
+                            script_bot.widget.macrosOptions.onTabChange = function(widget, tabName)
+                                script_bot.updateScriptList(tabName:getText())
+                                script_bot.filterScripts(script_bot.widget.searchBar:getText())
+                            end
+                        end
+
+                        -- Execução principal
+                        do
+                            script_bot.readScripts()
+                            script_bot.onLoading()
+                        end
+
+                        if script_manager.actualVersion ~= actualVersion then
+                            script_bot.buttonRemoveJson:show()
+                            updateLabel:show()
+                        end
+                    end
+                end
             end
-        end
-    end
-end
-
----------------------------------------------------------------------
--- 🧩 Função principal de carregamento de abas
----------------------------------------------------------------------
-function script_bot.loadTabs()
-    local ui = script_bot.widget
-    if not ui or not script_manager or not script_manager._cache then return end
-
-    local tabBar = ui.macrosOptions
-    tabBar:clearTabs()
-
-    for categoryName in pairs(script_manager._cache) do
-        local tab = tabBar:addTab(categoryName)
-        tab:setId(categoryName)
-        tab.onStyleApply = function(widget)
-            if tabBar:getCurrentTab() == widget then
-                widget:setColor("green")
-            else
-                widget:setColor("white")
-            end
-        end
-    end
-
-    tabBar.onTabChange = function(widget, tab)
-        script_bot.updateScriptList(tab:getText())
-    end
-
-    local firstTab = tabBar:getCurrentTab()
-    if firstTab then
-        script_bot.updateScriptList(firstTab:getText())
-    end
-end
-
----------------------------------------------------------------------
--- 💾 Leitura e salvamento interno
----------------------------------------------------------------------
-function script_bot.readScripts()
-    if type(storage.community_scripts_data) == "table" and next(storage.community_scripts_data) ~= nil then
-        script_manager = storage.community_scripts_data
-    else
-        storage.community_scripts_data = script_manager
-    end
-end
-
-function script_bot.saveScripts()
-    storage.community_scripts_data = script_manager
-end
-
----------------------------------------------------------------------
--- 🔄 Reinicialização
----------------------------------------------------------------------
-function script_bot.restartStorage()
-    storage.community_scripts_data = {}
-    reload()
-end
-
----------------------------------------------------------------------
--- 🕓 Carregamento das bibliotecas
----------------------------------------------------------------------
-for _, library in ipairs(libraryList) do
-    modules._G.HTTP.get(library, function(content, error)
-        if not content then
-            print("[Community Scripts] Falha ao carregar:", library)
-            return
-        end
-        local ok, err = pcall(loadstring(content))
-        if not ok then
-            print("[Community Scripts] Erro:", err)
-            return
         end
     end)
 end
 
----------------------------------------------------------------------
--- ⏳ Aguarda lista de scripts e inicia UI
----------------------------------------------------------------------
+-- ===========================================================
+-- ⏳ Aguardar carregamento completo da lista (script.list.lua)
+-- ===========================================================
 local function waitForScripts()
     if not script_manager or not script_manager._cache or next(script_manager._cache) == nil then
         print("[Community Scripts] Aguardando lista de scripts carregar...")
@@ -238,9 +283,10 @@ local function waitForScripts()
         return
     end
 
-    script_bot.initUI()
-    script_bot.createMainButton()
-    print("[Community Scripts] Lista carregada, painel pronto.")
+    print("[Community Scripts] Lista carregada. Inicializando painel...")
+    if script_bot and script_bot.onLoading then
+        script_bot.onLoading()
+    end
 end
 
 scheduleEvent(waitForScripts, 1200)
