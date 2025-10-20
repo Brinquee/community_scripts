@@ -1,9 +1,5 @@
--- ===============================
--- script.list.lua  (carrega a lista de macros do seu repositório)
--- ===============================
-
+-- script.list.lua
 script_manager = script_manager or {}
-
 script_manager.actualVersion = 0.4
 
 script_manager._cache = {
@@ -15,16 +11,14 @@ script_manager._cache = {
       enabled = false
     },
   },
-
   Healing = {
     ['Regeneration'] = {
       url = 'https://raw.githubusercontent.com/Brinquee/community_scripts/main/Scripts/Healing/Regeneration.lua',
-      description = 'Casta a spell de regeneration abaixo da % configurada.',
+      description = 'Casta regeneration abaixo da % configurada.',
       author = 'Brinquee',
       enabled = false
     },
   },
-
   Nto = {
     ['Bug Map Kunai'] = {
       url = 'https://raw.githubusercontent.com/Brinquee/community_scripts/main/Scripts/Nto/Bug_map_kunai.lua',
@@ -33,39 +27,35 @@ script_manager._cache = {
       enabled = false
     },
   },
-
   PvP = {
     ['Follow Attack'] = {
       url = 'https://raw.githubusercontent.com/Brinquee/community_scripts/main/Scripts/PvP/follow_attack.lua',
-      description = 'Protótipo de follow attack (abre portas/jumps etc.).',
+      description = 'Protótipo follow attack.',
       author = 'Victor Neox / Brinquee',
       enabled = false
     },
   },
-
   Tibia = {
     ['Utana Vid'] = {
       url = 'https://raw.githubusercontent.com/Brinquee/community_scripts/main/Scripts/Tibia/utana_vid.lua',
-      description = 'Casta Utana Vid com mana mínima configurada.',
+      description = 'Casta Utana Vid com mana mínima.',
       author = 'VivoDibra / Brinquee',
       enabled = false
     },
   },
-
   Utilities = {
     ['Dance'] = {
       url = 'https://raw.githubusercontent.com/Brinquee/community_scripts/main/Scripts/Utilities/dance.lua',
-      description = 'Gira aleatoriamente (macro de teste).',
+      description = 'Gira aleatoriamente (teste).',
       author = 'Brinquee',
       enabled = false
     },
   },
 }
 
--- Log de depuração: conta quantas categorias e itens existem
-local catCount, itemCount = 0, 0
-for _, cat in pairs(script_manager._cache) do
-  catCount = catCount + 1
-  for _ in pairs(cat) do itemCount = itemCount + 1 end
+local cats, items = 0, 0
+for _, c in pairs(script_manager._cache) do
+  cats = cats + 1
+  for _ in pairs(c) do items = items + 1 end
 end
-print(string.format('[script.list.lua] OK - categorias: %d, itens: %d', catCount, itemCount))
+print(string.format('[script.list.lua] OK - categorias: %d, itens: %d', cats, items))
