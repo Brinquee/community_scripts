@@ -1,8 +1,9 @@
 -- ===========================================================
--- Community Scripts (Loader + Painel) - Revisado
--- - Cria o botão "Script Manager" imediatamente (sem depender da lista)
+-- Community Scripts (Loader + Painel) - Revisado (com HOTFIX)
+-- - Cria o botão "Script Manager" imediatamente
 -- - Carrega Library.lua e script.list.lua do seu repo
 -- - Painel centralizado, estilo madeira, com abas, busca e toggle
+-- - HOTFIX no final garante que o painel SEMPRE abre (completo ou mínimo)
 -- ===========================================================
 
 -- ---------- Setup básico ----------
@@ -234,7 +235,7 @@ UIWidget
 end
 
 -- ===========================================================
--- Botão: agora nasce IMEDIATAMENTE quando a UI está pronta
+-- Botão: nasce IMEDIATAMENTE quando a UI está pronta
 -- ===========================================================
 local function createToolbarButton()
   if script_bot.button and not script_bot.button:isDestroyed() then
@@ -298,3 +299,180 @@ local function initUI()
 end
 
 initUI()
+
+-- ===========================================================
+-- =====================  H O T F I X  ========================
+-- (Garante que o clique do botão SEMPRE abre um painel,
+-- caindo para um painel mínimo se o completo falhar)
+-- ===========================================================
+
+-- 1) Constrói um painel MÍNIMO (à prova de erro)
+local function cs_buildMinimalPanel()
+  if script_bot.widget and not script_bot.widget:isDestroyed() then
+    script_bot.widget:destroy()
+  end
+
+  local ui = [[
+MainWindow
+  id: scriptManagerWin
+  text: Script Manager
+  size: 300 220
+  color: #d2cac5
+  background-color: #3a2d1e
+  opacity: 0.96
+  focusable: true
+  padding: 8
+
+  Label
+    id: title
+    anchors.top: parent.top
+    anchors.horizontalCenter: parent.horizontalCenter
+    margin-top: 6
+    text: Painel carregado!
+
+  TextEdit
+    id: searchBar
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.top: title.bottom
+    margin-top: 8
+    text: digite para filtrar...
+
+  ScrollablePanel
+    id: scriptList
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.top: searchBar.bottom
+    anchors.bottom: parent.bottom
+    margin-top: 6
+    layout:
+      type: verticalBox
+]]
+  local ok, w = pcall(function() return setupUI(ui, g_ui.getRootWidget()) end)
+  if not ok or not w then
+    print("[CommunityScripts][ERRO] setupUI falhou no painel mínimo:", ok, w)
+    return nil
+  end
+
+  script_bot.widget = w
+
+  -- centraliza com fallback
+  addEvent(function()
+    local root = g_ui.getRootWidget()
+    if w.centerInParent then
+      pcall(function() w:centerInParent() end)
+    else
+      local x = (root:getWidth() - w:getWidth())/2
+      local y = (root:getHeight() - w:getHeight())/2
+      w:move({x=x, y=y})
+    end
+  end)
+
+  -- restaura posição salva (se existir)
+  storage.scriptManager = storage.scriptManager or { pos=nil, visible=false }
+  if storage.scriptManager.pos then w:move(storage.scriptManager.pos) end
+  local oldMove = w.move
+  w.move = function(self, pos)
+    if oldMove then oldMove(self, pos) end
+    storage.scriptManager.pos = pos
+  end
+
+  -- filtro simples
+  w.searchBar.onTextChange = function(_, text)
+    for _, child in pairs(w.scriptList:getChildren()) do
+      local id = (child:getId() or ""):lower()
+      if id:find((text or ""):lower()) then child:show() else child:hide() end
+    end
+  end
+
+  print("[CommunityScripts] Painel mínimo criado.")
+  return w
+end
+
+-- 2) Se o painel "completo" falhar, cai no mínimo
+local function cs_openPanel()
+  -- tenta usar painel existente
+  if script_bot.widget and not script_bot.widget:isDestroyed() then
+    script_bot.widget:show()
+    addEvent(function() if script_bot.widget.centerInParent then pcall(function() script_bot.widget:centerInParent() end) end end)
+    print("[CommunityScripts] Painel já existia; mostrando.")
+    return
+  end
+
+  -- tenta reconstruir o painel completo se a função existir
+  if type(buildScriptPanel) == "function" then
+    local ok, w = pcall(buildScriptPanel)
+    if ok and w then
+      w:show()
+      addEvent(function() if w.centerInParent then pcall(function() w:centerInParent() end) end end)
+      print("[CommunityScripts] Painel completo criado.")
+      -- se já tem cache, popula abas/lista
+      if script_manager and script_manager._cache and script_bot.buildTabs then
+        pcall(script_bot.buildTabs)
+      end
+      return
+    else
+      print("[CommunityScripts][WARN] Painel completo falhou, abrindo mínimo:", w)
+    end
+  end
+
+  -- fallback: painel mínimo
+  local w2 = cs_buildMinimalPanel()
+  if w2 then
+    w2:show()
+  end
+end
+
+-- 3) Substitui o clique do botão para SEMPRE abrir algo
+local function cs_patchButton()
+  if not script_bot.button or script_bot.button:isDestroyed() then
+    -- tenta recriar caso não exista
+    if UI and UI.Button then
+      script_bot.button = UI.Button('Script Manager', function() end, getTab('Main') or setDefaultTab('Main'))
+    else
+      print("[CommunityScripts][ERRO] UI.Button indisponível.")
+      return
+    end
+  end
+
+  script_bot.button.onClick = function()
+    -- se visível, alterna; se não existir, cria
+    if script_bot.widget and not script_bot.widget:isDestroyed() and script_bot.widget:isVisible() then
+      script_bot.widget:hide()
+      storage.scriptManager.visible = false
+      return
+    end
+
+    -- abre (completo -> mínimo)
+    cs_openPanel()
+    storage.scriptManager.visible = true
+
+    -- quando a lista carregar, se o painel mínimo estiver aberto, injeta linhas simples
+    if script_bot.widget and script_bot.widget.scriptList and script_manager and script_manager._cache then
+      local list = script_bot.widget.scriptList
+      list:destroyChildren()
+      for cat, macros in pairs(script_manager._cache) do
+        -- título de categoria
+        local catLabel = UI.Label(("== %s =="):format(cat), list)
+        catLabel:setColor("yellow")
+        catLabel:setId(("cat_%s"):format(cat))
+        -- itens
+        for name, data in pairs(macros) do
+          local row = UI.Label(("- %s"):format(name), list)
+          row:setId(name)
+          row:setTooltip((data.description or "-") .. "\n" .. (data.url or ""))
+        end
+      end
+    end
+  end
+  print("[CommunityScripts] Botão patchado: clique garantido abre o painel (completo ou mínimo).")
+end
+
+-- 4) Aplica o patch assim que a UI estiver pronta
+local function cs_waitUI()
+  if not g_ui or not g_ui.getRootWidget() then
+    scheduleEvent(cs_waitUI, 150); return
+  end
+  cs_patchButton()
+end
+cs_waitUI()
