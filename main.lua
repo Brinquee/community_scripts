@@ -1,20 +1,20 @@
 -- ===========================================================
--- BRINQUE - OTC - CUSTOM  + Macro Dock (painel separado p/ macros)
+-- BRINQUE - OTC - CUSTOM  (painel compacto + redireciono de abas)
 -- ===========================================================
 
 script_bot = {}
 
 -- --- Config -------------------------------------------------
-local BOT_TAB_ID       = 'Main'   -- onde fica o botão principal
-local actualVersion    = 0.1
-local RAW              = 'https://raw.githubusercontent.com/Brinquee/community_scripts/main/Scripts'
+local TAB_ID = 'Main'
+local actualVersion = 0.1
+local RAW = 'https://raw.githubusercontent.com/Brinquee/community_scripts/main/Scripts'
 local LOAD_ACTIVE_ON_START = true
 
--- --- ABA do BOT (só p/ botão principal) --------------------
-setDefaultTab(BOT_TAB_ID)
-local botTab = getTab(BOT_TAB_ID) or setDefaultTab(BOT_TAB_ID)
+-- --- Setup aba ---------------------------------------------
+setDefaultTab(TAB_ID)
+local tabName = getTab(TAB_ID) or setDefaultTab(TAB_ID)
 
--- --- Storage -----------------------------------------------
+-- --- Storage ------------------------------------------------
 storage.cs_enabled  = storage.cs_enabled  or {}  -- [cat][name] = true/false
 storage.cs_last_tab = storage.cs_last_tab or nil
 
@@ -24,6 +24,36 @@ local function logStatus(msg)
   if script_bot.widget and script_bot.widget.statusLabel then
     script_bot.widget.statusLabel:setText(msg)
   end
+end
+
+-- ==== ABA OCULTA p/ capturar UI criada pelos scripts =======
+local HIDDEN_TAB_ID = '_BRQ_MACROS'
+local hiddenTab = getTab(HIDDEN_TAB_ID) or setDefaultTab(HIDDEN_TAB_ID)
+pcall(function() if hiddenTab and hiddenTab.hide then hiddenTab:hide() end end)
+
+-- wrappers para redirecionar getTab/setDefaultTab só enquanto carrega
+local _orig_getTab, _orig_setDefaultTab
+local function beginRedirectTabs()
+  _orig_getTab = _orig_getTab or getTab
+  _orig_setDefaultTab = _orig_setDefaultTab or setDefaultTab
+
+  _G.getTab = function(name)
+    -- qualquer tentativa de usar "Main" ou a aba padrão vai para a oculta
+    if name == 'Main' or name == TAB_ID then
+      return hiddenTab
+    end
+    return _orig_getTab(name)
+  end
+
+  _G.setDefaultTab = function(name)
+    -- força default na oculta durante o load
+    return _orig_setDefaultTab(HIDDEN_TAB_ID)
+  end
+end
+
+local function endRedirectTabs()
+  if _orig_getTab then _G.getTab = _orig_getTab; _orig_getTab = nil end
+  if _orig_setDefaultTab then _G.setDefaultTab = _orig_setDefaultTab; _orig_setDefaultTab = nil end
 end
 
 -- evita recarregar mesma URL no mesmo reload
@@ -38,7 +68,9 @@ local function safeLoadUrl(url)
       logStatus('Erro ao baixar: ' .. (err or 'sem resposta'))
       return
     end
+    beginRedirectTabs()
     local ok, res = pcall(loadstring(content))
+    endRedirectTabs()
     if not ok then
       logStatus('Erro ao executar: ' .. tostring(res))
     else
@@ -108,7 +140,7 @@ script_manager = {
 }
 
 -- ===========================================================
--- UI: Gerenciador (lista/abas/ligar scripts)
+-- UI
 -- ===========================================================
 local itemRow = [[
 UIWidget
@@ -128,7 +160,6 @@ UIWidget
 
 script_bot.widget = setupUI([[
 MainWindow
-  id: managerWin
   !text: tr('BRINQUE - OTC - CUSTOM')
   font: terminus-14px-bold
   color: #05fff5
@@ -149,7 +180,7 @@ MainWindow
     margin-top: 45
     margin-left: 2
     margin-right: 15
-    margin-bottom: 75
+    margin-bottom: 52
     vertical-scrollbar: scriptListScrollBar
 
   VerticalScrollBar
@@ -166,7 +197,7 @@ MainWindow
     anchors.left: parent.left
     anchors.right: parent.right
     anchors.bottom: parent.bottom
-    margin-bottom: 50
+    margin-bottom: 28
     text-align: center
     font: terminus-14px
     color: yellow
@@ -199,23 +230,13 @@ MainWindow
     margin-left: 5
 
   Button
-    id: dockButton
-    !text: tr('Dock')
-    font: cipsoftFont
-    anchors.left: toggleAllButton.right
-    anchors.bottom: parent.bottom
-    size: 55 20
-    margin-bottom: 1
-    margin-left: 5
-
-  Button
     id: closeButton
     !text: tr('Fechar')
     font: cipsoftFont
     anchors.right: parent.right
-    anchors.left: dockButton.right
+    anchors.left: toggleAllButton.right
     anchors.bottom: parent.bottom
-    size: 65 20
+    size: 80 20
     margin-bottom: 1
     margin-right: 5
     margin-left: 5
@@ -226,48 +247,7 @@ script_bot.widget:setText('BRINQUE - OTC - CUSTOM')
 script_bot.widget.statusLabel:setText('Pronto.')
 pcall(function() script_bot.widget:move(10, 10) end)
 
--- ===========================================================
--- UI: Macro Dock (onde os macros colocam seus widgets)
--- ===========================================================
-script_bot.dock = setupUI([[
-MainWindow
-  id: macroDockWin
-  !text: tr('BRINQUE - Macro Dock')
-  font: terminus-14px-bold
-  color: #05fff5
-  size: 250 350
-
-  ScrollablePanel
-    id: macroDock
-    layout:
-      type: verticalBox
-    anchors.fill: parent
-    margin-top: 8
-    margin-left: 8
-    margin-right: 8
-    margin-bottom: 8
-    vertical-scrollbar: macroDockScroll
-
-  VerticalScrollBar
-    id: macroDockScroll
-    anchors.top: macroDock.top
-    anchors.bottom: macroDock.bottom
-    anchors.right: macroDock.right
-    step: 14
-    pixels-scroll: true
-    margin-right: -6
-]], g_ui.getRootWidget())
-
-script_bot.dock:hide()
-pcall(function() script_bot.dock:move(370, 10) end)
-
--- *** PONTO-CHAVE: redireciona os UIs dos macros para o Dock ***
--- tudo que for criado com "... , tabName)" cairá aqui:
-tabName = script_bot.dock.macroDock  -- global de propósito
-
--- ===========================================================
--- Botão principal (fica no painel do bot)
--- ===========================================================
+-- Botão principal
 script_bot.buttonWidget = UI.Button('BRINQUE CUSTOM', function()
   if script_bot.widget:isVisible() then
     reload()
@@ -275,42 +255,35 @@ script_bot.buttonWidget = UI.Button('BRINQUE CUSTOM', function()
     script_bot.widget:show()
     local last = storage.cs_last_tab
     if last then
-      for _, w in ipairs(script_bot.widget.macrosOptions:getChildren()) do
-        if w.getText and w:getText() == last then
-          script_bot.widget.macrosOptions:selectTab(w)
-          break
+      local function findTabByTextOrId(tabbar, key)
+        if not tabbar or not key then return nil end
+        for _, w in ipairs(tabbar:getChildren()) do
+          if w.getText and (w:getText() == key) then return w end
+          if w.getId   and (w:getId()   == key) then return w end
         end
+        return nil
       end
+      local w = findTabByTextOrId(script_bot.widget.macrosOptions, last)
+      if w then script_bot.widget.macrosOptions:selectTab(w) end
     end
   end
-end, botTab)
+end, tabName)
 script_bot.buttonWidget:setColor('#11ffecff')
 
--- Botão Dock (abre/fecha o Macro Dock)
-script_bot.widget.dockButton.onClick = function()
-  if script_bot.dock:isVisible() then
-    script_bot.dock:hide()
-  else
-    script_bot.dock:show()
-  end
-end
-
--- Fechar gerenciador
+-- Fechar
 script_bot.widget.closeButton:setTooltip('Fechar e recarregar.')
 script_bot.widget.closeButton.onClick = function()
   reload()
   script_bot.widget:hide()
 end
 
--- Busca (sem debounce)
+-- Busca
 script_bot.widget.searchBar:setTooltip('Buscar...')
 script_bot.widget.searchBar.onTextChange = function(_, text)
   script_bot.filterScripts(text)
 end
 
--- ===========================================================
--- Lista / filtro
--- ===========================================================
+-- === Lista / filtro ========================================
 function script_bot.filterScripts(filterText)
   local q = (filterText or ''):lower()
   for _, child in pairs(script_bot.widget.scriptList:getChildren()) do
@@ -332,19 +305,15 @@ function script_bot.updateScriptList(tabText)
     row:setTooltip(('Description: %s\nAuthor: %s\n(Click = ON/OFF | Right-click = abrir URL)')
       :format(data.description or '-', data.author or '-'))
 
-    -- ON/OFF
     row.onClick = function()
       local newState = not isEnabled(tabText, name)
       setEnabled(tabText, name, newState)
       row.textToSet:setColor(newState and 'green' or '#bdbdbd')
       if newState and data.url then
         safeLoadUrl(data.url)
-        -- garante que o Dock esteja visível quando ligar algo
-        if not script_bot.dock:isVisible() then script_bot.dock:show() end
       end
     end
 
-    -- abrir URL com botão direito (opcional)
     row.onMousePress = function(_, _, button)
       if button == MouseRightButton and data.url then
         if g_platform and g_platform.openUrl then
@@ -378,15 +347,14 @@ script_bot.widget.toggleAllButton.onClick = function()
       safeLoadUrl(data.url)
     end
   end
-  if turnOn and not script_bot.dock:isVisible() then script_bot.dock:show() end
   script_bot.updateScriptList(cat)
 end
 
 -- Recarregar (limpa cache dos que estão ON e baixa de novo)
 script_bot.widget.refreshButton.onClick = function()
-  for _, list in pairs(script_manager._cache) do
+  for cat, list in pairs(script_manager._cache) do
     for name, data in pairs(list) do
-      if isEnabled(_, name) and data.url then
+      if isEnabled(cat, name) and data.url then
         loadedUrls[data.url] = nil
       end
     end
@@ -401,10 +369,9 @@ script_bot.widget.refreshButton.onClick = function()
     end
   end
   logStatus('Recarregado(s): ' .. loaded)
-  if loaded > 0 and not script_bot.dock:isVisible() then script_bot.dock:show() end
 end
 
--- Monta as abas do gerenciador
+-- Monta as abas
 do
   local cats = {}
   for cat in pairs(script_manager._cache) do table.insert(cats, cat) end
@@ -461,7 +428,6 @@ if LOAD_ACTIVE_ON_START then
     end
   end
   if bootCount > 0 then
-    if not script_bot.dock:isVisible() then script_bot.dock:show() end
     logStatus('Scripts ativos carregados: ' .. bootCount)
   end
 end
