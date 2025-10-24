@@ -1,5 +1,5 @@
 -- ===========================================================
--- BRINQUE - OTC - CUSTOM  (painel compacto + Dock + isolamento de UI)
+-- BRINQUE - OTC - CUSTOM  (painel compacto + Macro Dock)
 -- ===========================================================
 
 script_bot = {}
@@ -18,6 +18,11 @@ local tabName = getTab(TAB_ID) or setDefaultTab(TAB_ID)
 storage.cs_enabled  = storage.cs_enabled  or {}  -- [cat][name] = true/false
 storage.cs_last_tab = storage.cs_last_tab or nil
 
+-- --- Estado (novos) ----------------------------------------
+script_bot.active = script_bot.active or {}  -- ["CAT::NAME"] = {cat=..., name=...}
+
+local function keyFor(cat, name) return (cat .. "::" .. name) end
+
 -- --- Utils --------------------------------------------------
 local function logStatus(msg)
   print('[BRINQUE CUSTOM]', msg)
@@ -26,93 +31,7 @@ local function logStatus(msg)
   end
 end
 
--- ===========================================================
---   ABA OCULTA + WRAPPERS para impedir UI no painel do bot
--- ===========================================================
-local HIDDEN_TAB_ID = '_BRQ_MACROS'
-local hiddenTab = getTab(HIDDEN_TAB_ID) or setDefaultTab(HIDDEN_TAB_ID)
-pcall(function() if hiddenTab and hiddenTab.hide then hiddenTab:hide() end end)
-
-local _orig = {}
-
-local function beginRedirect()
-  -- guardar originais uma única vez
-  if not next(_orig) then
-    _orig.getTab         = getTab
-    _orig.setDefaultTab  = setDefaultTab
-    _orig.createWidget   = g_ui.createWidget
-    _orig.UI_Button      = UI.Button
-    _orig.UI_Label       = UI.Label
-    _orig.UI_TextEdit    = UI.TextEdit
-    _orig.UI_CheckBox    = UI.CheckBox
-    _orig.UI_ComboBox    = UI.ComboBox
-    _orig.UI_Separator   = UI.Separator
-    _orig.macro          = macro
-    _orig.hotkey         = hotkey
-  end
-
-  _G.getTab = function(_) return hiddenTab end
-  _G.setDefaultTab = function(_) return _orig.setDefaultTab(HIDDEN_TAB_ID) end
-
-  g_ui.createWidget = function(style, parent)
-    parent = parent or hiddenTab
-    return _orig.createWidget(style, parent)
-  end
-
-  UI.Button    = function(text, cb, parent) return _orig.UI_Button(text, cb, hiddenTab) end
-  UI.Label     = function(text, parent)     return _orig.UI_Label(text, hiddenTab)     end
-  UI.TextEdit  = function(text, parent)     return _orig.UI_TextEdit(text or '', hiddenTab) end
-  UI.CheckBox  = function(text, parent)     return _orig.UI_CheckBox(text, hiddenTab)  end
-  UI.ComboBox  = function(parent)           return _orig.UI_ComboBox(hiddenTab)        end
-  UI.Separator = function(parent)           return _orig.UI_Separator(hiddenTab)       end
-
-  -- Captura nome do macro/hotkey para listar no Dock
-  local function _attachToDock(obj, name)
-    if not obj then return end
-    local title = name
-    if not title then
-      if type(obj.getName) == 'function' then title = obj:getName() end
-      title = title or 'Macro'
-    end
-    if obj.switch and obj.switch.setParent then
-      pcall(function() obj.switch:setParent(hiddenTab) end)
-    end
-    if script_bot and script_bot._dockAdd then
-      script_bot._dockAdd(title, obj)
-    end
-  end
-
-  _G.macro = function(a, b, c, ...)
-    local name = (type(a) == 'string' and a) or (type(b) == 'string' and b) or nil
-    local m = _orig.macro(a, b, c, ...)
-    _attachToDock(m, name)
-    return m
-  end
-
-  _G.hotkey = function(keys, name, fn)
-    local hk = _orig.hotkey(keys, name, fn)
-    _attachToDock(hk, name)
-    return hk
-  end
-end
-
-local function endRedirect()
-  if _orig.getTab then _G.getTab = _orig.getTab end
-  if _orig.setDefaultTab then _G.setDefaultTab = _orig.setDefaultTab end
-  if _orig.createWidget then g_ui.createWidget = _orig.createWidget end
-  if _orig.UI_Button then UI.Button = _orig.UI_Button end
-  if _orig.UI_Label  then UI.Label  = _orig.UI_Label  end
-  if _orig.UI_TextEdit then UI.TextEdit = _orig.UI_TextEdit end
-  if _orig.UI_CheckBox then UI.CheckBox = _orig.UI_CheckBox end
-  if _orig.UI_ComboBox then UI.ComboBox = _orig.UI_ComboBox end
-  if _orig.UI_Separator then UI.Separator = _orig.UI_Separator end
-  if _orig.macro then _G.macro = _orig.macro end
-  if _orig.hotkey then _G.hotkey = _orig.hotkey end
-end
-
--- ===========================================================
---   Carregamento seguro (com cache)
--- ===========================================================
+-- evita recarregar mesma URL no mesmo reload
 loadedUrls = loadedUrls or {}
 local function safeLoadUrl(url)
   if loadedUrls[url] then
@@ -124,9 +43,7 @@ local function safeLoadUrl(url)
       logStatus('Erro ao baixar: ' .. (err or 'sem resposta'))
       return
     end
-    beginRedirect()
     local ok, res = pcall(loadstring(content))
-    endRedirect()
     if not ok then
       logStatus('Erro ao executar: ' .. tostring(res))
     else
@@ -145,42 +62,68 @@ local function setEnabled(cat, name, value)
 end
 
 -- ===========================================================
--- LISTA LOCAL (edite à vontade)
+-- LISTA LOCAL (podes editar/expandir à vontade)
 -- ===========================================================
 script_manager = {
   actualVersion = actualVersion,
   _cache = {
     HEALING = {
-      ['Regeneration'] = { url = RAW .. '/Healing/Regeneration.lua', description = 'Cura por % de HP.', author = 'Brinquee' },
+      ['Regeneration'] = {
+        url = RAW .. '/Healing/Regeneration.lua',
+        description = 'Cura por % de HP.',
+        author = 'Brinquee',
+      },
     },
     SUPPORT = {
-      ['Utana Vid']    = { url = RAW .. '/Tibia/utana_vid.lua',       description = 'Invisibilidade automática.', author = 'Brinquee' },
+      ['Utana Vid'] = {
+        url = RAW .. '/Tibia/utana_vid.lua',
+        description = 'Invisibilidade automática.',
+        author = 'Brinquee',
+      },
     },
     COMBOS = {
-      ['Follow Attack']= { url = RAW .. '/PvP/follow_attack.lua',      description = 'Seguir e atacar target.',    author = 'VictorNeox' },
+      ['Follow Attack'] = {
+        url = RAW .. '/PvP/follow_attack.lua',
+        description = 'Seguir e atacar target.',
+        author = 'VictorNeox',
+      },
     },
     ESPECIALS = {
-      ['Reflect']      = { url = RAW .. '/Dbo/Reflect.lua',            description = 'Reflect (DBO).',             author = 'Brinquee' },
+      ['Reflect'] = {
+        url = RAW .. '/Dbo/Reflect.lua',
+        description = 'Reflect (DBO).',
+        author = 'Brinquee',
+      },
     },
     TEAMS = {
-      ['Bug Map Kunai']= { url = RAW .. '/Nto/Bug_map_kunai.lua',      description = 'Bug map kunai (PC).',        author = 'Brinquee' },
+      ['Bug Map Kunai'] = {
+        url = RAW .. '/Nto/Bug_map_kunai.lua',
+        description = 'Bug map kunai (PC).',
+        author = 'Brinquee',
+      },
     },
     ICONS = {
-      ['Dance']        = { url = RAW .. '/Utilities/dance.lua',        description = 'Dança / diversão.',          author = 'Brinquee' },
+      ['Dance'] = {
+        url = RAW .. '/Utilities/dance.lua',
+        description = 'Dança / diversão.',
+        author = 'Brinquee',
+      },
     },
   }
 }
 
 -- ===========================================================
--- UI principal (Manager)
+-- UI principal
 -- ===========================================================
 local itemRow = [[
 UIWidget
   background-color: alpha
   focusable: true
   height: 30
+
   $focus:
     background-color: #00000055
+
   Label
     id: textToSet
     font: terminus-14px-bold
@@ -263,18 +206,18 @@ MainWindow
     id: dockButton
     !text: tr('Dock')
     font: cipsoftFont
-    anchors.left: toggleAllButton.right
+    anchors.right: closeButton.left
     anchors.bottom: parent.bottom
     size: 60 20
     margin-bottom: 1
-    margin-left: 5
+    margin-right: 5
 
   Button
     id: closeButton
     !text: tr('Fechar')
     font: cipsoftFont
     anchors.right: parent.right
-    anchors.left: dockButton.right
+    anchors.left: toggleAllButton.right
     anchors.bottom: parent.bottom
     size: 80 20
     margin-bottom: 1
@@ -287,7 +230,7 @@ script_bot.widget:setText('BRINQUE - OTC - CUSTOM')
 script_bot.widget.statusLabel:setText('Pronto.')
 pcall(function() script_bot.widget:move(10, 10) end)
 
--- Botão principal no painel
+-- Botão principal no painel do bot
 script_bot.buttonWidget = UI.Button('BRINQUE CUSTOM', function()
   if script_bot.widget:isVisible() then
     reload()
@@ -295,12 +238,16 @@ script_bot.buttonWidget = UI.Button('BRINQUE CUSTOM', function()
     script_bot.widget:show()
     local last = storage.cs_last_tab
     if last then
-      for _, w in ipairs(script_bot.widget.macrosOptions:getChildren()) do
-        if w.getText and w:getText() == last then
-          script_bot.widget.macrosOptions:selectTab(w)
-          break
+      local function findTabByTextOrId(tabbar, key)
+        if not tabbar or not key then return nil end
+        for _, w in ipairs(tabbar:getChildren()) do
+          if w.getText and (w:getText() == key) then return w end
+          if w.getId   and (w:getId()   == key) then return w end
         end
+        return nil
       end
+      local w = findTabByTextOrId(script_bot.widget.macrosOptions, last)
+      if w then script_bot.widget.macrosOptions:selectTab(w) end
     end
   end
 end, tabName)
@@ -320,55 +267,73 @@ script_bot.widget.searchBar.onTextChange = function(_, text)
 end
 
 -- ===========================================================
--- Macro Dock (janela secundária com X no topo)
+-- Macro Dock (painel secundário)
 -- ===========================================================
-script_bot._dockItems = script_bot._dockItems or {}
+local dockItemRow = [[
+UIWidget
+  height: 26
+  background-color: alpha
+  focusable: true
 
-script_bot.dockWidget = setupUI([[
+  $hover:
+    background-color: #00000055
+
+  Label
+    id: label
+    font: terminus-14px-bold
+    anchors.left: parent.left
+    anchors.verticalCenter: parent.verticalCenter
+    margin-left: 8
+]]
+
+function script_bot.ensureDock()
+  if script_bot.dockWidget and not script_bot.dockWidget:isDestroyed() then return end
+  script_bot.dockWidget = setupUI([[
 MainWindow
-  id: dockRoot
+  id: macroDock
   !text: tr('BRINQUE - Macro Dock')
   font: terminus-14px-bold
   color: #05fff5
-  size: 260 420
+  size: 260 360
 
   Button
-    id: closeDock
+    id: dockClose
     !text: tr('X')
     anchors.top: parent.top
     anchors.right: parent.right
-    size: 24 22
+    size: 18 18
+    margin-top: 6
+    margin-right: 6
 
   ScrollablePanel
-    id: dockList
+    id: macroDockList
     layout:
       type: verticalBox
-    anchors.top: closeDock.bottom
-    anchors.left: parent.left
-    anchors.right: parent.right
-    anchors.bottom: parent.bottom
-    margin-top: 6
+    anchors.fill: parent
+    margin-top: 30
     margin-left: 6
-    margin-right: 12
-    margin-bottom: 8
-    vertical-scrollbar: dockScroll
+    margin-right: 16
+    margin-bottom: 10
+    vertical-scrollbar: macroDockScroll
 
   VerticalScrollBar
-    id: dockScroll
-    anchors.top: dockList.top
-    anchors.bottom: dockList.bottom
-    anchors.right: dockList.right
+    id: macroDockScroll
+    anchors.top: macroDockList.top
+    anchors.bottom: macroDockList.bottom
+    anchors.right: macroDockList.right
     step: 14
     pixels-scroll: true
-    margin-right: -8
+    margin-right: -10
 ]], g_ui.getRootWidget())
-script_bot.dockWidget:hide()
-pcall(function() script_bot.dockWidget:move(320, 40) end)
-
-script_bot.dockWidget.closeDock.onClick = function()
   script_bot.dockWidget:hide()
+
+  script_bot.dockWidget.dockClose.onClick = function()
+    script_bot.dockWidget:hide()
+  end
 end
-script_bot.widget.dockButton.onClick = function()
+
+function script_bot.toggleDock()
+  script_bot.ensureDock()
   if script_bot.dockWidget:isVisible() then
     script_bot.dockWidget:hide()
   else
@@ -376,73 +341,64 @@ script_bot.widget.dockButton.onClick = function()
   end
 end
 
--- Row visual do Dock
-local dockRow = [[
-UIWidget
-  background-color: #2a1e17e0
-  height: 26
-  margin-top: 4
-  padding-left: 8
-  padding-right: 8
-  focusable: true
-  $hover:
-    background-color: #3a2a20e0
-  Label
-    id: rowText
-    anchors.verticalCenter: parent.verticalCenter
-    font: terminus-14px-bold
-    color: #a0a0a0
-]]
+script_bot.widget.dockButton.onClick = function() script_bot.toggleDock() end
 
--- adiciona/atualiza item no dock
-function script_bot._dockAdd(name, obj)
-  if not name or not obj then return end
-  -- evita duplicata pelo próprio objeto
-  for _, it in ipairs(script_bot._dockItems) do
-    if it.obj == obj then
-      it.name = name
-      if it.widget and it.widget.rowText then
-        it.widget.rowText:setText(name)
+-- preenche o Dock a partir do mapa "active"
+function script_bot.rebuildDock()
+  script_bot.ensureDock()
+  local list = script_bot.dockWidget.macroDockList
+  if not list then return end
+  list:destroyChildren()
+
+  -- ordenado por categoria/nome
+  local keys = {}
+  for k in pairs(script_bot.active) do table.insert(keys, k) end
+  table.sort(keys)
+
+  for _, k in ipairs(keys) do
+    local info = script_bot.active[k]
+    local row = setupUI(dockItemRow, list)
+    row:setId(k)
+    row.label:setText(('%s • %s'):format(info.cat, info.name))
+    row:setTooltip('Clique para desligar este macro.')
+
+    -- desligar pelo Dock
+    row.onClick = function()
+      setEnabled(info.cat, info.name, false)
+      script_bot.active[k] = nil
+      script_bot.rebuildDock()
+      -- repinta a lista da aba atual
+      local cur = script_bot.widget.macrosOptions:getCurrentTab()
+      if cur and cur.getText then
+        script_bot.updateScriptList(cur:getText())
       end
-      return
     end
   end
-  local w = setupUI(dockRow, script_bot.dockWidget.dockList)
-  w.rowText:setText(name)
-  local function paint()
-    local isOn = false
-    if type(obj.isOn) == 'function' then
-      local ok, v = pcall(obj.isOn, obj); if ok then isOn = v end
-    end
-    w.rowText:setColor(isOn and 'green' or '#a0a0a0')
-  end
-  w.onClick = function()
-    if type(obj.isOn) == 'function' and type(obj.setOn) == 'function' then
-      local ok, v = pcall(obj.isOn, obj); v = ok and v or false
-      pcall(obj.setOn, obj, not v)
-      paint()
-    end
-  end
-  w.onMousePress = function(_, _, button)
-    if button == MouseRightButton then
-      -- destruir macro opcionalmente (se suportado)
-      if type(obj.destroy) == 'function' then pcall(obj.destroy, obj) end
-      w:destroy()
-      -- remove do cache
-      for i, it in ipairs(script_bot._dockItems) do
-        if it.obj == obj then table.remove(script_bot._dockItems, i) break end
-      end
-      return true
-    end
-    return false
-  end
-  table.insert(script_bot._dockItems, {name=name, obj=obj, widget=w, paint=paint})
-  paint()
 end
 
--- ===========================================================
--- Lógica de lista/filtro no Manager
--- ===========================================================
+-- sincroniza 1 macro no Dock
+function script_bot.syncDockFor(cat, name, isOn)
+  local k = keyFor(cat, name)
+  if isOn then
+    script_bot.active[k] = { cat = cat, name = name }
+  else
+    script_bot.active[k] = nil
+  end
+end
+
+-- varre o storage e reconstrói "active"
+function script_bot.scanStorageToActive()
+  script_bot.active = {}
+  for cat, list in pairs(script_manager._cache) do
+    for name, _ in pairs(list) do
+      if isEnabled(cat, name) then
+        script_bot.active[keyFor(cat, name)] = { cat = cat, name = name }
+      end
+    end
+  end
+end
+
+-- === Lista / filtro ========================================
 function script_bot.filterScripts(filterText)
   local q = (filterText or ''):lower()
   for _, child in pairs(script_bot.widget.scriptList:getChildren()) do
@@ -464,15 +420,19 @@ function script_bot.updateScriptList(tabText)
     row:setTooltip(('Description: %s\nAuthor: %s\n(Click = ON/OFF | Right-click = abrir URL)')
       :format(data.description or '-', data.author or '-'))
 
+    -- ON/OFF
     row.onClick = function()
       local newState = not isEnabled(tabText, name)
       setEnabled(tabText, name, newState)
       row.textToSet:setColor(newState and 'green' or '#bdbdbd')
-      if newState and data.url then
-        safeLoadUrl(data.url)
-      end
+      -- carrega o script se ligou
+      if newState and data.url then safeLoadUrl(data.url) end
+      -- sincroniza Dock
+      script_bot.syncDockFor(tabText, name, newState)
+      script_bot.rebuildDock()
     end
 
+    -- abrir URL com botão direito
     row.onMousePress = function(_, _, button)
       if button == MouseRightButton and data.url then
         if g_platform and g_platform.openUrl then
@@ -502,14 +462,15 @@ script_bot.widget.toggleAllButton.onClick = function()
 
   for name, data in pairs(list) do
     setEnabled(cat, name, turnOn)
-    if turnOn and data.url then
-      safeLoadUrl(data.url)
-    end
+    if turnOn and data.url then safeLoadUrl(data.url) end
+    script_bot.syncDockFor(cat, name, turnOn)
   end
+
   script_bot.updateScriptList(cat)
+  script_bot.rebuildDock()
 end
 
--- Recarregar (limpa cache dos ON e baixa de novo)
+-- Recarregar (limpa cache dos que estão ON e baixa de novo)
 script_bot.widget.refreshButton.onClick = function()
   for cat, list in pairs(script_manager._cache) do
     for name, data in pairs(list) do
@@ -527,6 +488,8 @@ script_bot.widget.refreshButton.onClick = function()
       end
     end
   end
+  script_bot.scanStorageToActive()
+  script_bot.rebuildDock()
   logStatus('Recarregado(s): ' .. loaded)
 end
 
@@ -575,7 +538,7 @@ do
   end
 end
 
--- Carrega automaticamente os que estavam ON
+-- Boot: carrega ON e sincroniza Dock
 if LOAD_ACTIVE_ON_START then
   local bootCount = 0
   for cat, list in pairs(script_manager._cache) do
@@ -586,9 +549,15 @@ if LOAD_ACTIVE_ON_START then
       end
     end
   end
+  script_bot.scanStorageToActive()
+  script_bot.rebuildDock()
   if bootCount > 0 then
     logStatus('Scripts ativos carregados: ' .. bootCount)
   end
+else
+  -- mesmo que não carregue, ainda assim mostra os que estão ON no Dock
+  script_bot.scanStorageToActive()
+  script_bot.rebuildDock()
 end
 
 logStatus('Pronto. Selecione uma aba e ative scripts.')
