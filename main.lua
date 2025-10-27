@@ -1,12 +1,12 @@
 -- ===========================================================
--- BRINQUE - OTC - CUSTOM  (painel compacto + Macro Dock)
+-- BRINQUE - OTC - CUSTOM (painel + Macro Dock + esconder Bot)
 -- ===========================================================
 
 script_bot = {}
 
 -- --- Config -------------------------------------------------
 local TAB_ID = 'Main'
-local actualVersion = 0.2
+local actualVersion = 0.3
 local RAW = 'https://raw.githubusercontent.com/Brinquee/community_scripts/main/Scripts'
 local LOAD_ACTIVE_ON_START = true
 
@@ -18,9 +18,8 @@ local tabName = getTab(TAB_ID) or setDefaultTab(TAB_ID)
 storage.cs_enabled  = storage.cs_enabled  or {}  -- [cat][name] = true/false
 storage.cs_last_tab = storage.cs_last_tab or nil
 
--- --- Estado (novos) ----------------------------------------
-script_bot.active = script_bot.active or {}  -- ["CAT::NAME"] = {cat=..., name=...}
-
+-- --- Estado (Dock) -----------------------------------------
+script_bot.active = script_bot.active or {}      -- ["CAT::NAME"] = {cat=..., name=...}
 local function keyFor(cat, name) return (cat .. "::" .. name) end
 
 -- --- Utils --------------------------------------------------
@@ -31,25 +30,16 @@ local function logStatus(msg)
   end
 end
 
--- evita recarregar mesma URL no mesmo reload
 loadedUrls = loadedUrls or {}
 local function safeLoadUrl(url)
   if loadedUrls[url] then
-    logStatus('Já carregado: ' .. url)
-    return
+    logStatus('Já carregado: ' .. url); return
   end
   modules.corelib.HTTP.get(url, function(content, err)
-    if not content then
-      logStatus('Erro ao baixar: ' .. (err or 'sem resposta'))
-      return
-    end
+    if not content then logStatus('Erro ao baixar: ' .. (err or 'sem resposta')); return end
     local ok, res = pcall(loadstring(content))
-    if not ok then
-      logStatus('Erro ao executar: ' .. tostring(res))
-    else
-      loadedUrls[url] = true
-      logStatus('Script carregado com sucesso.')
-    end
+    if not ok then logStatus('Erro ao executar: ' .. tostring(res))
+    else loadedUrls[url] = true; logStatus('Script carregado com sucesso.') end
   end)
 end
 
@@ -61,53 +51,76 @@ local function setEnabled(cat, name, value)
   storage.cs_enabled[cat][name] = value and true or false
 end
 
+-- === Esconder UI que scripts criam no painel do Bot =========
+local function botRoot()
+  return modules and modules.game_bot and modules.game_bot.contentsPanel
+end
+
+local function hideWidget(w)
+  pcall(function()
+    if w.setVisible then w:setVisible(false) end
+    if w.setHeight  then w:setHeight(0)      end
+  end)
+end
+
+-- percorre recursivamente e esconde widgets cujo texto combine com o nome do macro
+local function hideBotMacroWidgetsByName(name)
+  local root = botRoot(); if not root then return end
+  local target = (name or ''):lower()
+  local function scan(node)
+    for _, c in ipairs(node:getChildren() or {}) do
+      local t = ''
+      if c.getText then t = (c:getText() or ''):lower() end
+      if t ~= '' and (t == target or t:find(target, 1, true)) then
+        hideWidget(c)
+      end
+      scan(c)
+    end
+  end
+  scan(root)
+end
+
+-- varredura total (para boot/refresh)
+local function sweepAllVisibleInBot()
+  for k, info in pairs(script_bot.active) do
+    hideBotMacroWidgetsByName(info.name)
+  end
+  -- também esconde mensagens/complementos comuns
+  local root = botRoot(); if not root then return end
+  for _, c in ipairs(root:getChildren() or {}) do
+    local txt = c.getText and c:getText() or ''
+    if type(txt) == 'string' then
+      txt = txt:lower()
+      if txt:find('script carregado') or txt:find('recarregado') then
+        hideWidget(c)
+      end
+    end
+  end
+end
+
 -- ===========================================================
--- LISTA LOCAL (podes editar/expandir à vontade)
+-- LISTA LOCAL
 -- ===========================================================
 script_manager = {
   actualVersion = actualVersion,
   _cache = {
     HEALING = {
-      ['Regeneration'] = {
-        url = RAW .. '/Healing/Regeneration.lua',
-        description = 'Cura por % de HP.',
-        author = 'Brinquee',
-      },
+      ['Regeneration'] = { url = RAW .. '/Healing/Regeneration.lua', description = 'Cura por % de HP.', author = 'Brinquee' },
     },
     SUPPORT = {
-      ['Utana Vid'] = {
-        url = RAW .. '/Tibia/utana_vid.lua',
-        description = 'Invisibilidade automática.',
-        author = 'Brinquee',
-      },
+      ['Utana Vid'] = { url = RAW .. '/Tibia/utana_vid.lua', description = 'Invisibilidade automática.', author = 'Brinquee' },
     },
     COMBOS = {
-      ['Follow Attack'] = {
-        url = RAW .. '/PvP/follow_attack.lua',
-        description = 'Seguir e atacar target.',
-        author = 'VictorNeox',
-      },
+      ['Follow Attack'] = { url = RAW .. '/PvP/follow_attack.lua', description = 'Seguir e atacar target.', author = 'VictorNeox' },
     },
     ESPECIALS = {
-      ['Reflect'] = {
-        url = RAW .. '/Dbo/Reflect.lua',
-        description = 'Reflect (DBO).',
-        author = 'Brinquee',
-      },
+      ['Reflect'] = { url = RAW .. '/Dbo/Reflect.lua', description = 'Reflect (DBO).', author = 'Brinquee' },
     },
     TEAMS = {
-      ['Bug Map Kunai'] = {
-        url = RAW .. '/Nto/Bug_map_kunai.lua',
-        description = 'Bug map kunai (PC).',
-        author = 'Brinquee',
-      },
+      ['Bug Map Kunai'] = { url = RAW .. '/Nto/Bug_map_kunai.lua', description = 'Bug map kunai (PC).', author = 'Brinquee' },
     },
     ICONS = {
-      ['Dance'] = {
-        url = RAW .. '/Utilities/dance.lua',
-        description = 'Dança / diversão.',
-        author = 'Brinquee',
-      },
+      ['Dance'] = { url = RAW .. '/Utilities/dance.lua', description = 'Dança / diversão.', author = 'Brinquee' },
     },
   }
 }
@@ -120,10 +133,7 @@ UIWidget
   background-color: alpha
   focusable: true
   height: 30
-
-  $focus:
-    background-color: #00000055
-
+  $focus:  background-color: #00000055
   Label
     id: textToSet
     font: terminus-14px-bold
@@ -147,8 +157,7 @@ MainWindow
 
   ScrollablePanel
     id: scriptList
-    layout:
-      type: verticalBox
+    layout: { type: verticalBox }
     anchors.fill: parent
     margin-top: 45
     margin-left: 2
@@ -230,7 +239,7 @@ script_bot.widget:setText('BRINQUE - OTC - CUSTOM')
 script_bot.widget.statusLabel:setText('Pronto.')
 pcall(function() script_bot.widget:move(10, 10) end)
 
--- Botão principal no painel do bot
+-- botão no painel do bot
 script_bot.buttonWidget = UI.Button('BRINQUE CUSTOM', function()
   if script_bot.widget:isVisible() then
     reload()
@@ -253,31 +262,21 @@ script_bot.buttonWidget = UI.Button('BRINQUE CUSTOM', function()
 end, tabName)
 script_bot.buttonWidget:setColor('#11ffecff')
 
--- Fechar
-script_bot.widget.closeButton:setTooltip('Fechar e recarregar.')
-script_bot.widget.closeButton.onClick = function()
-  reload()
-  script_bot.widget:hide()
-end
+-- Fechar rápido
+script_bot.widget.closeButton.onClick = function() reload(); script_bot.widget:hide() end
 
 -- Busca
-script_bot.widget.searchBar:setTooltip('Buscar...')
-script_bot.widget.searchBar.onTextChange = function(_, text)
-  script_bot.filterScripts(text)
-end
+script_bot.widget.searchBar.onTextChange = function(_, text) script_bot.filterScripts(text) end
 
 -- ===========================================================
--- Macro Dock (painel secundário)
+-- Macro Dock (secundário)
 -- ===========================================================
 local dockItemRow = [[
 UIWidget
   height: 26
   background-color: alpha
   focusable: true
-
-  $hover:
-    background-color: #00000055
-
+  $hover: background-color: #00000055
   Label
     id: label
     font: terminus-14px-bold
@@ -307,8 +306,7 @@ MainWindow
 
   ScrollablePanel
     id: macroDockList
-    layout:
-      type: verticalBox
+    layout: { type: verticalBox }
     anchors.fill: parent
     margin-top: 30
     margin-left: 6
@@ -326,67 +324,43 @@ MainWindow
     margin-right: -10
 ]], g_ui.getRootWidget())
   script_bot.dockWidget:hide()
-
-  script_bot.dockWidget.dockClose.onClick = function()
-    script_bot.dockWidget:hide()
-  end
+  script_bot.dockWidget.dockClose.onClick = function() script_bot.dockWidget:hide() end
 end
 
 function script_bot.toggleDock()
   script_bot.ensureDock()
-  if script_bot.dockWidget:isVisible() then
-    script_bot.dockWidget:hide()
-  else
-    script_bot.dockWidget:show()
-  end
+  if script_bot.dockWidget:isVisible() then script_bot.dockWidget:hide() else script_bot.dockWidget:show() end
 end
-
 script_bot.widget.dockButton.onClick = function() script_bot.toggleDock() end
 
--- preenche o Dock a partir do mapa "active"
 function script_bot.rebuildDock()
   script_bot.ensureDock()
-  local list = script_bot.dockWidget.macroDockList
-  if not list then return end
+  local list = script_bot.dockWidget.macroDockList; if not list then return end
   list:destroyChildren()
-
-  -- ordenado por categoria/nome
-  local keys = {}
-  for k in pairs(script_bot.active) do table.insert(keys, k) end
-  table.sort(keys)
-
+  local keys = {}; for k in pairs(script_bot.active) do table.insert(keys, k) end; table.sort(keys)
   for _, k in ipairs(keys) do
     local info = script_bot.active[k]
     local row = setupUI(dockItemRow, list)
     row:setId(k)
     row.label:setText(('%s • %s'):format(info.cat, info.name))
     row:setTooltip('Clique para desligar este macro.')
-
-    -- desligar pelo Dock
     row.onClick = function()
       setEnabled(info.cat, info.name, false)
       script_bot.active[k] = nil
       script_bot.rebuildDock()
-      -- repinta a lista da aba atual
       local cur = script_bot.widget.macrosOptions:getCurrentTab()
-      if cur and cur.getText then
-        script_bot.updateScriptList(cur:getText())
-      end
+      if cur and cur.getText then script_bot.updateScriptList(cur:getText()) end
+      -- pode ser que o script continue rodando; use Recarregar para limpar totalmente
     end
   end
 end
 
--- sincroniza 1 macro no Dock
 function script_bot.syncDockFor(cat, name, isOn)
   local k = keyFor(cat, name)
-  if isOn then
-    script_bot.active[k] = { cat = cat, name = name }
-  else
-    script_bot.active[k] = nil
-  end
+  if isOn then script_bot.active[k] = { cat = cat, name = name }
+  else script_bot.active[k] = nil end
 end
 
--- varre o storage e reconstrói "active"
 function script_bot.scanStorageToActive()
   script_bot.active = {}
   for cat, list in pairs(script_manager._cache) do
@@ -398,7 +372,9 @@ function script_bot.scanStorageToActive()
   end
 end
 
--- === Lista / filtro ========================================
+-- ===========================================================
+-- Lista / filtro / toggle
+-- ===========================================================
 function script_bot.filterScripts(filterText)
   local q = (filterText or ''):lower()
   for _, child in pairs(script_bot.widget.scriptList:getChildren()) do
@@ -409,9 +385,7 @@ end
 
 function script_bot.updateScriptList(tabText)
   script_bot.widget.scriptList:destroyChildren()
-  local list = script_manager._cache[tabText]
-  if not list then return end
-
+  local list = script_manager._cache[tabText]; if not list then return end
   for name, data in pairs(list) do
     local row = setupUI(itemRow, script_bot.widget.scriptList)
     row:setId(name)
@@ -420,24 +394,21 @@ function script_bot.updateScriptList(tabText)
     row:setTooltip(('Description: %s\nAuthor: %s\n(Click = ON/OFF | Right-click = abrir URL)')
       :format(data.description or '-', data.author or '-'))
 
-    -- ON/OFF
     row.onClick = function()
       local newState = not isEnabled(tabText, name)
       setEnabled(tabText, name, newState)
       row.textToSet:setColor(newState and 'green' or '#bdbdbd')
-      -- carrega o script se ligou
-      if newState and data.url then safeLoadUrl(data.url) end
-      -- sincroniza Dock
+      if newState and data.url then
+        safeLoadUrl(data.url)
+        hideBotMacroWidgetsByName(name)   -- << esconde no Bot
+      end
       script_bot.syncDockFor(tabText, name, newState)
       script_bot.rebuildDock()
     end
 
-    -- abrir URL com botão direito
     row.onMousePress = function(_, _, button)
       if button == MouseRightButton and data.url then
-        if g_platform and g_platform.openUrl then
-          g_platform.openUrl(data.url)
-        end
+        if g_platform and g_platform.openUrl then g_platform.openUrl(data.url) end
         return true
       end
       return false
@@ -447,90 +418,59 @@ end
 
 -- Toggle All
 script_bot.widget.toggleAllButton.onClick = function()
-  local tab = script_bot.widget.macrosOptions:getCurrentTab()
-  if not tab then return end
-  local cat = tab.text
-  local list = script_manager._cache[cat]
-  if not list then return end
-
+  local tab = script_bot.widget.macrosOptions:getCurrentTab(); if not tab then return end
+  local cat = tab.text; local list = script_manager._cache[cat]; if not list then return end
   local onCount, allCount = 0, 0
-  for name, _ in pairs(list) do
-    allCount = allCount + 1
-    if isEnabled(cat, name) then onCount = onCount + 1 end
-  end
+  for name, _ in pairs(list) do allCount = allCount + 1; if isEnabled(cat, name) then onCount = onCount + 1 end end
   local turnOn = onCount < allCount
-
   for name, data in pairs(list) do
     setEnabled(cat, name, turnOn)
-    if turnOn and data.url then safeLoadUrl(data.url) end
+    if turnOn and data.url then safeLoadUrl(data.url); hideBotMacroWidgetsByName(name) end
     script_bot.syncDockFor(cat, name, turnOn)
   end
-
   script_bot.updateScriptList(cat)
   script_bot.rebuildDock()
+  sweepAllVisibleInBot()
 end
 
--- Recarregar (limpa cache dos que estão ON e baixa de novo)
+-- Recarregar (limpa cache e baixa de novo; reoculta no Bot)
 script_bot.widget.refreshButton.onClick = function()
   for cat, list in pairs(script_manager._cache) do
     for name, data in pairs(list) do
-      if isEnabled(cat, name) and data.url then
-        loadedUrls[data.url] = nil
-      end
+      if isEnabled(cat, name) and data.url then loadedUrls[data.url] = nil end
     end
   end
   local loaded = 0
   for cat, list in pairs(script_manager._cache) do
     for name, data in pairs(list) do
-      if isEnabled(cat, name) and data.url then
-        loaded = loaded + 1
-        safeLoadUrl(data.url)
-      end
+      if isEnabled(cat, name) and data.url then loaded = loaded + 1; safeLoadUrl(data.url); hideBotMacroWidgetsByName(name) end
     end
   end
   script_bot.scanStorageToActive()
   script_bot.rebuildDock()
+  sweepAllVisibleInBot()
   logStatus('Recarregado(s): ' .. loaded)
 end
 
--- Monta as abas
+-- Abas
 do
-  local cats = {}
-  for cat in pairs(script_manager._cache) do table.insert(cats, cat) end
-  table.sort(cats)
-
+  local cats = {}; for cat in pairs(script_manager._cache) do table.insert(cats, cat) end; table.sort(cats)
   for _, cat in ipairs(cats) do
     local tab = script_bot.widget.macrosOptions:addTab(cat)
-    tab:setId(cat)
-    tab:setTooltip(cat .. ' macros')
+    tab:setId(cat); tab:setTooltip(cat .. ' macros')
     tab.onStyleApply = function(widget)
-      if script_bot.widget.macrosOptions:getCurrentTab() == widget then
-        widget:setColor('#05fff5')
-      else
-        widget:setColor('red')
-      end
+      if script_bot.widget.macrosOptions:getCurrentTab() == widget then widget:setColor('#05fff5') else widget:setColor('red') end
     end
   end
-
   local startTab = storage.cs_last_tab or cats[1]
   for _, w in ipairs(script_bot.widget.macrosOptions:getChildren()) do
-    if w.getText and w:getText() == startTab then
-      script_bot.widget.macrosOptions:selectTab(w)
-      break
-    end
+    if w.getText and w:getText() == startTab then script_bot.widget.macrosOptions:selectTab(w); break end
   end
-
   local cur = script_bot.widget.macrosOptions:getCurrentTab()
-  if cur and cur.getText then
-    script_bot.updateScriptList(cur:getText())
-  end
-
+  if cur and cur.getText then script_bot.updateScriptList(cur:getText()) end
   script_bot.widget.macrosOptions.onTabChange = function(_, t)
     local name = (type(t) == 'userdata' and t.getText) and t:getText() or t
-    if not name or name == '' then
-      local c = script_bot.widget.macrosOptions:getCurrentTab()
-      name = (c and c.getText) and c:getText() or name
-    end
+    if not name or name == '' then local c = script_bot.widget.macrosOptions:getCurrentTab(); name = (c and c.getText) and c:getText() or name end
     if not name then return end
     storage.cs_last_tab = name
     script_bot.updateScriptList(name)
@@ -538,26 +478,22 @@ do
   end
 end
 
--- Boot: carrega ON e sincroniza Dock
+-- Boot
 if LOAD_ACTIVE_ON_START then
   local bootCount = 0
   for cat, list in pairs(script_manager._cache) do
     for name, data in pairs(list) do
-      if isEnabled(cat, name) and data.url then
-        bootCount = bootCount + 1
-        safeLoadUrl(data.url)
-      end
+      if isEnabled(cat, name) and data.url then bootCount = bootCount + 1; safeLoadUrl(data.url) end
     end
   end
   script_bot.scanStorageToActive()
   script_bot.rebuildDock()
-  if bootCount > 0 then
-    logStatus('Scripts ativos carregados: ' .. bootCount)
-  end
+  sweepAllVisibleInBot()
+  if bootCount > 0 then logStatus('Scripts ativos carregados: ' .. bootCount) end
 else
-  -- mesmo que não carregue, ainda assim mostra os que estão ON no Dock
   script_bot.scanStorageToActive()
   script_bot.rebuildDock()
+  sweepAllVisibleInBot()
 end
 
 logStatus('Pronto. Selecione uma aba e ative scripts.')
