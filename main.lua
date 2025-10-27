@@ -1,12 +1,13 @@
 -- ===========================================================
 -- BRINQUE - OTC - CUSTOM (painel + Macro Dock + esconder Bot)
+-- com reload leve automatico ao desligar no Dock
 -- ===========================================================
 
 script_bot = {}
 
 -- --- Config -------------------------------------------------
 local TAB_ID = 'Main'
-local actualVersion = 0.3
+local actualVersion = 0.4
 local RAW = 'https://raw.githubusercontent.com/Brinquee/community_scripts/main/Scripts'
 local LOAD_ACTIVE_ON_START = true
 
@@ -33,7 +34,7 @@ end
 loadedUrls = loadedUrls or {}
 local function safeLoadUrl(url)
   if loadedUrls[url] then
-    logStatus('Já carregado: ' .. url); return
+    logStatus('Ja carregado: ' .. url); return
   end
   modules.corelib.HTTP.get(url, function(content, err)
     if not content then logStatus('Erro ao baixar: ' .. (err or 'sem resposta')); return end
@@ -82,10 +83,9 @@ end
 
 -- varredura total (para boot/refresh)
 local function sweepAllVisibleInBot()
-  for k, info in pairs(script_bot.active) do
+  for _, info in pairs(script_bot.active) do
     hideBotMacroWidgetsByName(info.name)
   end
-  -- também esconde mensagens/complementos comuns
   local root = botRoot(); if not root then return end
   for _, c in ipairs(root:getChildren() or {}) do
     local txt = c.getText and c:getText() or ''
@@ -108,7 +108,7 @@ script_manager = {
       ['Regeneration'] = { url = RAW .. '/Healing/Regeneration.lua', description = 'Cura por % de HP.', author = 'Brinquee' },
     },
     SUPPORT = {
-      ['Utana Vid'] = { url = RAW .. '/Tibia/utana_vid.lua', description = 'Invisibilidade automática.', author = 'Brinquee' },
+      ['Utana Vid'] = { url = RAW .. '/Tibia/utana_vid.lua', description = 'Invisibilidade automatica.', author = 'Brinquee' },
     },
     COMBOS = {
       ['Follow Attack'] = { url = RAW .. '/PvP/follow_attack.lua', description = 'Seguir e atacar target.', author = 'VictorNeox' },
@@ -120,7 +120,7 @@ script_manager = {
       ['Bug Map Kunai'] = { url = RAW .. '/Nto/Bug_map_kunai.lua', description = 'Bug map kunai (PC).', author = 'Brinquee' },
     },
     ICONS = {
-      ['Dance'] = { url = RAW .. '/Utilities/dance.lua', description = 'Dança / diversão.', author = 'Brinquee' },
+      ['Dance'] = { url = RAW .. '/Utilities/dance.lua', description = 'Danca / diversao.', author = 'Brinquee' },
     },
   }
 }
@@ -239,7 +239,7 @@ script_bot.widget:setText('BRINQUE - OTC - CUSTOM')
 script_bot.widget.statusLabel:setText('Pronto.')
 pcall(function() script_bot.widget:move(10, 10) end)
 
--- botão no painel do bot
+-- botao no painel do bot
 script_bot.buttonWidget = UI.Button('BRINQUE CUSTOM', function()
   if script_bot.widget:isVisible() then
     reload()
@@ -262,14 +262,14 @@ script_bot.buttonWidget = UI.Button('BRINQUE CUSTOM', function()
 end, tabName)
 script_bot.buttonWidget:setColor('#11ffecff')
 
--- Fechar rápido
+-- Fechar rapido
 script_bot.widget.closeButton.onClick = function() reload(); script_bot.widget:hide() end
 
 -- Busca
 script_bot.widget.searchBar.onTextChange = function(_, text) script_bot.filterScripts(text) end
 
 -- ===========================================================
--- Macro Dock (secundário)
+-- Macro Dock (secundario)
 -- ===========================================================
 local dockItemRow = [[
 UIWidget
@@ -345,12 +345,12 @@ function script_bot.rebuildDock()
     row.label:setText(('%s • %s'):format(info.cat, info.name))
     row:setTooltip('Clique para desligar este macro.')
     row.onClick = function()
+      -- desmarca e recarrega automaticamente os restantes
       setEnabled(info.cat, info.name, false)
       script_bot.active[k] = nil
-      script_bot.rebuildDock()
       local cur = script_bot.widget.macrosOptions:getCurrentTab()
       if cur and cur.getText then script_bot.updateScriptList(cur:getText()) end
-      -- pode ser que o script continue rodando; use Recarregar para limpar totalmente
+      script_bot.softReloadActive()   -- << reload leve automatico
     end
   end
 end
@@ -370,6 +370,34 @@ function script_bot.scanStorageToActive()
       end
     end
   end
+end
+
+-- ===========================================================
+-- Reload leve (so o que esta ON)
+-- ===========================================================
+function script_bot.softReloadActive()
+  -- prepara lista dos que estao ON
+  local toLoad = {}
+  for cat, list in pairs(script_manager._cache) do
+    for name, data in pairs(list) do
+      if isEnabled(cat, name) and data.url then
+        table.insert(toLoad, {cat=cat, name=name, url=data.url})
+        loadedUrls[data.url] = nil
+      end
+    end
+  end
+
+  local loaded = 0
+  for _, it in ipairs(toLoad) do
+    safeLoadUrl(it.url)
+    hideBotMacroWidgetsByName(it.name)
+    loaded = loaded + 1
+  end
+
+  script_bot.scanStorageToActive()
+  script_bot.rebuildDock()
+  sweepAllVisibleInBot()
+  logStatus('Recarregado(s): ' .. loaded)
 end
 
 -- ===========================================================
@@ -400,7 +428,7 @@ function script_bot.updateScriptList(tabText)
       row.textToSet:setColor(newState and 'green' or '#bdbdbd')
       if newState and data.url then
         safeLoadUrl(data.url)
-        hideBotMacroWidgetsByName(name)   -- << esconde no Bot
+        hideBotMacroWidgetsByName(name)   -- esconder no Bot
       end
       script_bot.syncDockFor(tabText, name, newState)
       script_bot.rebuildDock()
@@ -433,23 +461,9 @@ script_bot.widget.toggleAllButton.onClick = function()
   sweepAllVisibleInBot()
 end
 
--- Recarregar (limpa cache e baixa de novo; reoculta no Bot)
+-- Recarregar (usa o reload leve padrao)
 script_bot.widget.refreshButton.onClick = function()
-  for cat, list in pairs(script_manager._cache) do
-    for name, data in pairs(list) do
-      if isEnabled(cat, name) and data.url then loadedUrls[data.url] = nil end
-    end
-  end
-  local loaded = 0
-  for cat, list in pairs(script_manager._cache) do
-    for name, data in pairs(list) do
-      if isEnabled(cat, name) and data.url then loaded = loaded + 1; safeLoadUrl(data.url); hideBotMacroWidgetsByName(name) end
-    end
-  end
-  script_bot.scanStorageToActive()
-  script_bot.rebuildDock()
-  sweepAllVisibleInBot()
-  logStatus('Recarregado(s): ' .. loaded)
+  script_bot.softReloadActive()
 end
 
 -- Abas
