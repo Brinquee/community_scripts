@@ -1,184 +1,83 @@
--- Combo Tobirama Configurável com Delay Individual e Botão Flutuante
-setDefaultTab("Main")
+-- ===========================================================
+-- COMBOS - <SEU NOME DE MACRO AQUI> (modelo padrao)
+-- Seguro p/ recarregar, sem depender de 'tabName'
+-- ===========================================================
 
-local panelName = "comboTobirama"
+-- once-flag: impede inicializacao dupla no mesmo reload
+local LOADED_KEY = "__combos_<slug>_loaded__"
+if _G[LOADED_KEY] then return end
+_G[LOADED_KEY] = true
 
-if not storage[panelName] then
-  storage[panelName] = {
-    spells = {
-      "suiton suiryudan no jutsu",
-      "suiton bakusui shouha",
-      "suiton teppodama",
-      "suiton tenkyu",
-      "daibakufu no jutsu",
-      "suiton goshokuzame",
-      "suiton suishoha"
-    },
-    delay = 300
+-- aba de destino segura
+local DEST_TAB = getTab("Main") or setDefaultTab("Main")
+
+-- helpers opcionais (fallbacks no-ops, caso precise de UI extra)
+if not addScrollBar then
+  function addScrollBar(...) end
+end
+if not addItem then
+  function addItem(...) end
+end
+if not addSwitchBar then
+  function addSwitchBar(...) end
+end
+if not addCheckBox then
+  function addCheckBox(...) end
+end
+
+-- =======================
+-- Config padrao do combo
+-- =======================
+local COMBO_NAME  = "<SEU NOME>"
+local COMBO_DELAY = 100  -- ms
+
+-- Exemplo: sequencia de spells com delay entre elas
+-- Edite livremente conforme o combo
+local cfg = {
+  enabled      = true,         -- se quiser ler isso de storage, ok
+  minManaPerc  = 0,            -- filtro opcional
+  sayDelayMs   = 180,          -- delay entre 'say's
+  spells       = {             -- ordem do combo
+    -- "spell 1",
+    -- "spell 2",
+    -- "spell 3",
   }
-end
+}
 
----------------------------------------------------------------------
--- 🪟 Janela de Configuração
----------------------------------------------------------------------
-local comboWindow = setupUI([[
-UIWindow
-  !text: tr('Combo Tobirama - Configuração')
-  color: #99d6ff
-  font: verdana-11px-rounded
-  size: 270 280
-  background-color: black
-  opacity: 0.9
-  anchors.left: parent.left
-  anchors.top: parent.top
-  margin-left: 600
-  margin-top: 180
-
-  Label
-    id: titleLabel
-    text: Edite suas magias abaixo:
-    anchors.horizontalCenter: parent.horizontalCenter
-    anchors.top: parent.top
-    margin-top: 8
-    color: white
-    font: verdana-11px-rounded
-
-  TextEdit
-    id: spellsEdit
-    anchors.top: titleLabel.bottom
-    anchors.left: parent.left
-    anchors.right: parent.right
-    margin-left: 10
-    margin-right: 10
-    margin-top: 10
-    height: 140
-    multiline: true
-    font: verdana-11px-rounded
-    color: yellow
-
-  Label
-    id: delayLabel
-    text: Delay entre magias (ms):
-    anchors.left: parent.left
-    margin-left: 10
-    anchors.top: spellsEdit.bottom
-    margin-top: 8
-    color: white
-    font: verdana-11px-rounded
-
-  HorizontalScrollBar
-    id: delayScroll
-    anchors.left: parent.left
-    anchors.right: parent.right
-    anchors.top: delayLabel.bottom
-    margin-left: 10
-    margin-right: 10
-    margin-top: 3
-    minimum: 100
-    maximum: 2000
-    step: 100
-    height: 15
-
-  Label
-    id: delayValue
-    text: 300
-    anchors.right: parent.right
-    anchors.top: delayLabel.top
-    margin-right: 10
-    color: yellow
-    font: verdana-11px-rounded
-
-  Button
-    id: saveButton
-    text: Salvar
-    anchors.left: parent.left
-    anchors.bottom: parent.bottom
-    margin-left: 15
-    margin-bottom: 10
-    width: 100
-    height: 22
-    color: green
-    font: verdana-11px-rounded
-
-  Button
-    id: closeButton
-    text: Fechar
-    anchors.right: parent.right
-    anchors.bottom: parent.bottom
-    margin-right: 15
-    margin-bottom: 10
-    width: 100
-    height: 22
-    color: red
-    font: verdana-11px-rounded
-]], g_ui.getRootWidget())
-
-comboWindow:hide()
-
----------------------------------------------------------------------
--- 🎛️ Botão Flutuante (fora do vBot)
----------------------------------------------------------------------
-local comboButton = setupUI([[
-UIButton
-  id: openComboButton
-  text: Editar Combo
-  color: #00FF8C
-  font: verdana-11px-rounded
-  size: 120 25
-  opacity: 0.9
-  anchors.right: parent.right
-  anchors.verticalCenter: parent.verticalCenter
-  margin-right: 20
-]], g_ui.getRootWidget())
-
----------------------------------------------------------------------
--- ⚙️ Funções e Eventos
----------------------------------------------------------------------
-comboButton.onClick = function()
-  local spellsText = table.concat(storage[panelName].spells, "\n")
-  comboWindow.spellsEdit:setText(spellsText)
-  comboWindow.delayScroll:setValue(storage[panelName].delay)
-  comboWindow.delayValue:setText(storage[panelName].delay .. " ms")
-  comboWindow:show()
-  comboWindow:raise()
-  comboWindow:focus()
-end
-
-comboWindow.closeButton.onClick = function()
-  comboWindow:hide()
-end
-
-comboWindow.delayScroll.onValueChange = function(widget, value)
-  storage[panelName].delay = value
-  comboWindow.delayValue:setText(value .. " ms")
-end
-
-comboWindow.saveButton.onClick = function()
-  local text = comboWindow.spellsEdit:getText()
-  local spells = {}
-  for line in text:gmatch("[^\r\n]+") do
-    table.insert(spells, line)
+-- anti-spam simples p/ 'say'
+local function sayWithDelay(list, delayMs)
+  local t = 0
+  for _, s in ipairs(list) do
+    schedule(t, function() say(s) end)
+    t = t + (delayMs or 150)
   end
-  storage[panelName].spells = spells
-  comboWindow:hide()
-  info("Combo Tobirama atualizado com sucesso!")
 end
 
----------------------------------------------------------------------
--- 🔁 Macro Principal (delay entre magias)
----------------------------------------------------------------------
-macro(100, "Combo Tobirama", function()
-  if g_game.isAttacking() then
-    local delayValue = storage[panelName].delay or 300
-    local totalDelay = 0
+-- se ja existir macro/objeto anterior, apaga/para (idempotencia adicional)
+if _G.__BRINQUE_COMBOS == nil then _G.__BRINQUE_COMBOS = {} end
+local REG_KEY = "<slug>"     -- mude para um identificador unico
 
-    for _, spell in ipairs(storage[panelName].spells) do
-      schedule(totalDelay, function()
-        if g_game.isAttacking() then
-          say(spell)
-        end
-      end)
-      totalDelay = totalDelay + delayValue
-    end
+if _G.__BRINQUE_COMBOS[REG_KEY] and _G.__BRINQUE_COMBOS[REG_KEY].macro then
+  -- desliga o anterior se existir (metodo setOn(false) funciona na maioria dos builds)
+  pcall(function() _G.__BRINQUE_COMBOS[REG_KEY].macro:setOn(false) end)
+end
+
+-- ==================
+-- Macro principal
+-- ==================
+local comboMacro = macro(COMBO_DELAY, COMBO_NAME, function()
+  if not cfg.enabled then return end
+  if manapercent() < (cfg.minManaPerc or 0) then return end
+  if not g_game or not g_game.isOnline or not g_game:isOnline() then return end
+
+  -- >>> SUA LOGICA AQUI <<<
+  -- Exemplo: dispara a sequencia uma vez quando clicar uma hotkey,
+  -- ou quando detectar alguma condicao (target, hp do alvo, etc.)
+  -- Abaixo só um exemplo didático:
+  if isKeyPressed("F8") then
+    sayWithDelay(cfg.spells, cfg.sayDelayMs)
   end
-end)
+end, DEST_TAB)
+
+-- guarda referencia p/ evitar duplicatas em reload
+_G.__BRINQUE_COMBOS[REG_KEY] = { macro = comboMacro, cfg = cfg }
